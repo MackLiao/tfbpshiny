@@ -131,7 +131,9 @@ def main_table_server(
         # Apply friendly column names from metadata
         main_df = apply_column_names(main_df, MAIN_TABLE_COLUMN_METADATA)
 
-        main_df.reset_index(drop=True, inplace=True)
+        main_df.set_index("id", inplace=True)
+        main_df.sort_index(ascending=True, inplace=True)
+        main_df.reset_index(inplace=True)
 
         df_local_reactive.set(main_df)
 
