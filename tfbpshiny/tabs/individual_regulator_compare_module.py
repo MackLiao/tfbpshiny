@@ -133,7 +133,7 @@ def individual_regulator_compare_ui():
                 ui.div(
                     ui.accordion(
                         ui.accordion_panel(
-                            "Rank Response Plots",
+                            "Rank Response Plots Description",
                             ui.p(
                                 ui.tags.strong("Overview:"),
                                 ui.br(),
@@ -168,25 +168,25 @@ def individual_regulator_compare_ui():
                                 "hypothesis that the bound genes are no more responsive"
                                 " than the random expectation.",
                             ),
-                            ui.div(
-                                ui.tags.strong("How to Use:"),
-                                " ",
-                                "Clicking on rows in the ",
-                                ui.tags.b("Replicate Selection Table"),
-                                " controls which binding datasets are plotted. Tabs at "
-                                "the top show plots for different perturbation "
-                                "datasets. The sidebar allows control over which "
-                                "columns are displayed in this table.",
-                                style="padding: 10px; background-color: #f8f9fa; "
-                                "border-left: 4px solid #007bff; "
-                                "margin: 10px 0; "
-                                "font-size: 0.9em;",
-                            ),
                         ),
                         id="rank_response_plots_accordion",
                         open=False,
                     ),
                     ui.br(),
+                    ui.div(
+                        ui.tags.strong("How to Use:"),
+                        " ",
+                        "Clicking on rows in the ",
+                        ui.tags.b("Replicate Selection Table"),
+                        " controls which binding datasets are plotted. Tabs at "
+                        "the top show plots for different perturbation "
+                        "datasets. The sidebar allows control over which "
+                        "columns are displayed in this table.",
+                        style="padding: 10px; background-color: #f8f9fa; "
+                        "border-left: 4px solid #007bff; "
+                        "margin: 10px 0; "
+                        "font-size: 0.9em;",
+                    ),
                     ui.row(
                         ui.column(
                             7,
@@ -237,7 +237,7 @@ def individual_regulator_compare_ui():
             ui.div(
                 ui.accordion(
                     ui.accordion_panel(
-                        "Summarized Binding-Perturbation Comparisons",
+                        "Summarized Binding-Perturbation Comparisons Description",
                         ui.p(
                             ui.tags.strong("Overview:"),
                             ui.br(),
