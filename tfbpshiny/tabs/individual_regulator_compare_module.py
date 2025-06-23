@@ -8,14 +8,16 @@ from ..rank_response.replicate_plot_module import (
     rank_response_replicate_plot_tfko_ui,
 )
 from ..rank_response.replicate_selection_table_module import (
-    DEFAULT_REPLICATE_SELECTION_TABLE_COLUMNS,
-    REPLICATE_SELECTION_TABLE_CHOICES_DICT,
+    DEFAULT_REPLICATE_SELECTION_TABLE_GENERAL_QC_COLUMNS,
+    REPLICATE_SELECTION_TABLE_GENERAL_QC_CHOICES_DICT,
+    REPLICATE_SELECTION_TABLE_INSERT_CHOICES_DICT,
     replicate_selection_table_server,
     replicate_selection_table_ui,
 )
 from ..rank_response.summarized_binding_perturbation_comparison_module import (
     DEFAULT_SUMMARIZED_BINDING_PERTURBATION_COLUMNS,
     SUMMARIZED_BINDING_PERTURBATION_CHOICES_DICT,
+    SUMMARIZED_BINDING_PERTURBATION_DATABASE_IDENTIFIER_CHOICES_DICT,
     summarized_binding_perturbation_comparison_server,
     summarized_binding_perturbation_comparison_ui,
 )
@@ -63,20 +65,32 @@ def individual_regulator_compare_ui():
     replicate_selection_table_columns_panel = create_accordion_panel(
         "Replicate Selection Table Columns",
         ui.input_checkbox_group(
-            "replicate_selection_table_columns",
-            label="QC and Insert Metrics",
-            choices=REPLICATE_SELECTION_TABLE_CHOICES_DICT,
-            selected=DEFAULT_REPLICATE_SELECTION_TABLE_COLUMNS,
+            "replicate_selection_table_general_qc_columns",
+            label="General QC Metrics",
+            choices=REPLICATE_SELECTION_TABLE_GENERAL_QC_CHOICES_DICT,
+            selected=DEFAULT_REPLICATE_SELECTION_TABLE_GENERAL_QC_COLUMNS,
+        ),
+        ui.input_checkbox_group(
+            "replicate_selection_table_insert_table_columns",
+            label="Calling Cards QC Metrics",
+            choices=REPLICATE_SELECTION_TABLE_INSERT_CHOICES_DICT,
+            selected=[],
         ),
     )
 
     summarized_binding_perturbation_columns_panel = create_accordion_panel(
-        "Summarized Binding-Perturbation Comparison Columns",
+        "Comparison Summary Columns",
         ui.input_checkbox_group(
             "summarized_binding_perturbation_columns",
             label="Comparison Metrics",
             choices=SUMMARIZED_BINDING_PERTURBATION_CHOICES_DICT,
             selected=DEFAULT_SUMMARIZED_BINDING_PERTURBATION_COLUMNS,
+        ),
+        ui.input_checkbox_group(
+            "database_identifier_columns",
+            label="Database Identifier Columns",
+            choices=SUMMARIZED_BINDING_PERTURBATION_DATABASE_IDENTIFIER_CHOICES_DICT,
+            selected=[],
         ),
     )
 
@@ -339,13 +353,22 @@ def individual_regulator_compare_server(
         reactive.Value(DEFAULT_SUMMARIZED_BINDING_PERTURBATION_COLUMNS)
     )
 
+    # This reactive stores the database identifier columns selected from the side bar
+    # for the summarized binding-perturbation comparison table
+    selected_database_identifier_columns: reactive.value[list] = reactive.Value([])
+
     # This reactive stores the columns selected from the side bar for
     # the replicate selection table
     selected_replicate_selection_table_columns: reactive.value[list] = reactive.Value(
-        DEFAULT_REPLICATE_SELECTION_TABLE_COLUMNS
+        DEFAULT_REPLICATE_SELECTION_TABLE_GENERAL_QC_COLUMNS
     )
 
-    # Create reactive.calc versions for the table modules
+    # This reactive stores the columns selected from the side bar for
+    # the replicate selection table
+    selected_replicate_selection_table_insert_columns: reactive.value[list] = (
+        reactive.Value([])
+    )
+
     @reactive.calc
     def selected_replicate_selection_table_columns_calc():
         return selected_replicate_selection_table_columns.get()
@@ -353,6 +376,10 @@ def individual_regulator_compare_server(
     @reactive.calc
     def selected_summarized_binding_perturbation_columns_calc():
         return selected_summarized_binding_perturbation_columns.get()
+
+    @reactive.calc
+    def selected_database_identifier_columns_calc():
+        return selected_database_identifier_columns.get()
 
     @reactive.effect
     def _():
@@ -392,43 +419,75 @@ def individual_regulator_compare_server(
     @reactive.calc
     def has_column_changes():
         """Reactive to check if there are changes in column selection."""
-        current_replicate_selection_table_selection = set(
-            input.replicate_selection_table_columns.get() or []
+        current_replicate_selection_general_qc_table_selection = set(
+            input.replicate_selection_table_general_qc_columns.get() or []
         )
-        confirmed_replicate_selection_table_selection = set(
+        current_replicate_selection_insert_table_selection = set(
+            input.replicate_selection_table_insert_table_columns.get() or []
+        )
+        confirmed_replicate_selection_general_qc_table_selection = set(
             selected_replicate_selection_table_columns.get()
         )
-
+        confirmed_replicate_selection_insert_table_selection = set(
+            selected_replicate_selection_table_insert_columns.get()
+        )
         current_summarized_binding_perturbation_selection = set(
             input.summarized_binding_perturbation_columns.get() or []
         )
         confirmed_summarized_binding_perturbation_selection = set(
             selected_summarized_binding_perturbation_columns.get()
         )
+        current_database_identifier_selection = set(
+            input.database_identifier_columns.get() or []
+        )
+        confirmed_database_identifier_selection = set(
+            selected_database_identifier_columns.get()
+        )
 
         return (
             current_summarized_binding_perturbation_selection
             != confirmed_summarized_binding_perturbation_selection
-            or current_replicate_selection_table_selection
-            != confirmed_replicate_selection_table_selection
+            or current_database_identifier_selection
+            != confirmed_database_identifier_selection
+            or current_replicate_selection_general_qc_table_selection
+            != confirmed_replicate_selection_general_qc_table_selection
+            or current_replicate_selection_insert_table_selection
+            != confirmed_replicate_selection_insert_table_selection
         )
 
     @reactive.effect
     def _():
         """Update column choices for replicate selection table."""
-        selected = list(input.replicate_selection_table_columns.get())
+        selected_general_qc = list(
+            input.replicate_selection_table_general_qc_columns.get()
+        )
+        selected_insert = list(
+            input.replicate_selection_table_insert_table_columns.get()
+        )
 
-        ui.update_checkbox_group("replicate_selection_table_columns", selected=selected)
+        ui.update_checkbox_group(
+            "replicate_selection_table_general_qc_columns",
+            selected=selected_general_qc,
+        )
+        ui.update_checkbox_group(
+            "replicate_selection_table_insert_table_columns",
+            selected=selected_insert,
+        )
 
     @reactive.effect
     def _():
         """Update column choices for summarized binding-perturbation comparison
         table."""
         selected = list(input.summarized_binding_perturbation_columns.get())
+        selected_db_id = list(input.database_identifier_columns.get())
 
         ui.update_checkbox_group(
             "summarized_binding_perturbation_columns",
             selected=selected,
+        )
+        ui.update_checkbox_group(
+            "database_identifier_columns",
+            selected=selected_db_id,
         )
 
     # Update button appearance based on changes
@@ -454,8 +513,18 @@ def individual_regulator_compare_server(
             selected_summarized_binding_perturbation_columns_local
         )
 
+        selected_database_identifier_columns_local = list(
+            input.database_identifier_columns.get()
+        )
+        selected_database_identifier_columns.set(
+            selected_database_identifier_columns_local
+        )
+
         selected_replicate_selection_cols = list(
-            input.replicate_selection_table_columns.get()
+            input.replicate_selection_table_general_qc_columns.get()
+        )
+        selected_replicate_selection_cols.extend(
+            list(input.replicate_selection_table_insert_table_columns.get())
         )
         selected_replicate_selection_table_columns.set(
             selected_replicate_selection_cols
@@ -464,6 +533,10 @@ def individual_regulator_compare_server(
         logger.debug(
             "Updated summarized binding-perturbation comparison columns: %s",
             selected_summarized_binding_perturbation_columns_local,
+        )
+        logger.debug(
+            "Updated database identifier columns: %s",
+            selected_database_identifier_columns_local,
         )
         logger.debug(
             "Updated replicate selection table columns: %s",
@@ -495,6 +568,7 @@ def individual_regulator_compare_server(
         expression_source="kemmeren_tfko",
         selected_promotersetsigs=selected_promotersetsigs_reactive,
         selected_columns=selected_summarized_binding_perturbation_columns_calc,
+        selected_database_identifier_columns=selected_database_identifier_columns_calc,
         logger=logger,
     )
 
@@ -504,6 +578,7 @@ def individual_regulator_compare_server(
         expression_source="mcisaac_oe",
         selected_promotersetsigs=selected_promotersetsigs_reactive,
         selected_columns=selected_summarized_binding_perturbation_columns_calc,
+        selected_database_identifier_columns=selected_database_identifier_columns_calc,
         logger=logger,
     )
 

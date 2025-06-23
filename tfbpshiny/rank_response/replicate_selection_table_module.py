@@ -6,22 +6,10 @@ from ..utils.apply_column_names import apply_column_names
 from ..utils.rename_dataframe_data_sources import rename_dataframe_data_sources
 
 # Replicate selection table column metadata for selection
-REPLICATE_SELECTION_TABLE_COLUMN_METADATA = {
+REPLICATE_SELECTION_TABLE_GENERAL_QC_COLUMN_METADATA = {
     "binding_source": (
         "Binding Source",
         "Source of the binding data.",
-    ),
-    "genomic_inserts": (
-        "Genomic Inserts",
-        "Number of genomic inserts.",
-    ),
-    "mito_inserts": (
-        "Mito Inserts",
-        "Number of mitochondrial inserts.",
-    ),
-    "plasmid_inserts": (
-        "Plasmid Inserts",
-        "Number of plasmid inserts.",
     ),
     "rank_response_status": (
         "Rank Response Status",
@@ -33,14 +21,60 @@ REPLICATE_SELECTION_TABLE_COLUMN_METADATA = {
     ),
 }
 
+REPLICATE_SELECTION_TABLE_INSERT_COLUMN_METADATA = {
+    "genomic_inserts": (
+        "Genomic insertions",
+        "Number of genomic inserts.",
+    ),
+    "mito_inserts": (
+        "Mitochondrial insertions",
+        "Number of mitochondrial inserts.",
+    ),
+    "plasmid_inserts": (
+        "Plasmid insertions",
+        "Number of plasmid inserts.",
+    ),
+}
+
+REPLICATE_SELECTION_TABLE_DATABASE_IDENTIFIER_COLUMN_METADATA = {
+    "single_binding": (
+        "Single binding",
+        "Number of single binding.",
+    ),
+    "composite_binding": (
+        "Composite binding",
+        "Number of composite binding.",
+    ),
+}
+
+
 # Convert to dictionary: {value: HTML label}
-REPLICATE_SELECTION_TABLE_CHOICES_DICT = {
+REPLICATE_SELECTION_TABLE_GENERAL_QC_CHOICES_DICT = {
     key: ui.span(label, title=desc)
-    for key, (label, desc) in REPLICATE_SELECTION_TABLE_COLUMN_METADATA.items()
+    for key, (
+        label,
+        desc,
+    ) in REPLICATE_SELECTION_TABLE_GENERAL_QC_COLUMN_METADATA.items()
+}
+
+REPLICATE_SELECTION_TABLE_INSERT_CHOICES_DICT = {
+    key: ui.span(label, title=desc)
+    for key, (
+        label,
+        desc,
+    ) in REPLICATE_SELECTION_TABLE_INSERT_COLUMN_METADATA.items()
+}
+
+REPLICATE_SELECTION_TABLE_DATABASE_IDENTIFIER_CHOICES_DICT = {
+    key: ui.span(label, title=desc)
+    for key, (
+        label,
+        desc,
+    ) in REPLICATE_SELECTION_TABLE_DATABASE_IDENTIFIER_COLUMN_METADATA.items()
 }
 
 # Default selection for replicate selection table columns
-DEFAULT_REPLICATE_SELECTION_TABLE_COLUMNS = [
+DEFAULT_REPLICATE_SELECTION_TABLE_GENERAL_QC_COLUMNS = [
     "binding_source",
     "rank_response_status",
     "dto_status",
@@ -129,6 +163,12 @@ def replicate_selection_table_server(
             replicate_selection_df = replicate_selection_df[available_columns]
 
         replicate_selection_df = rename_dataframe_data_sources(replicate_selection_df)
+
+        REPLICATE_SELECTION_TABLE_COLUMN_METADATA = {
+            **REPLICATE_SELECTION_TABLE_GENERAL_QC_COLUMN_METADATA,
+            **REPLICATE_SELECTION_TABLE_INSERT_COLUMN_METADATA,
+            **REPLICATE_SELECTION_TABLE_DATABASE_IDENTIFIER_COLUMN_METADATA,
+        }
 
         # Apply friendly column names from metadata
         replicate_selection_df = apply_column_names(

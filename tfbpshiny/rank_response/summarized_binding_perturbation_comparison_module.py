@@ -12,32 +12,32 @@ from ..utils.safe_sci_notatation import safe_sci_notation
 
 # Summarized binding-perturbation comparison table column metadata for selection
 SUMMARIZED_BINDING_PERTURBATION_COLUMN_METADATA = {
-    "single_binding": (
-        "Single Binding",
-        "Unique ID for a single replicate; NA if composite.",
-    ),
-    "composite_binding": (
-        "Composite Binding",
-        "Unique ID for composite replicate; NA if single.",
-    ),
     "expression_time": (
-        "Expression Time",
+        "Time Since Perturbation",
         "Time point of McIsaac overexpression assay.",
     ),
     "univariate_rsquared": (
-        "R²",
+        "Linear Model R²",
         "R² of model perturbed ~ binding.",
     ),
     "univariate_pvalue": (
-        "P-value",
+        "Linear Model P-value",
         "P-value of model perturbed ~ binding.",
     ),
+    "dto_empirical_pvalue": (
+        "DTO Empirical P-value",
+        "Empirical p-value from DTO.",
+    ),
+    "dto_fdr": (
+        "DTO Minimum FDR",
+        "False discovery rate from DTO.",
+    ),
     "binding_rank_threshold": (
-        "Binding Rank Threshold",
+        "DTO Rank Threshold (binding)",
         "binding rank with most significant DTO overlap.",
     ),
     "perturbation_rank_threshold": (
-        "Perturbation Rank Threshold",
+        "DTO Rank Threshold (perturbation)",
         "perturbation rank with most significant DTO overlap.",
     ),
     "binding_set_size": (
@@ -54,21 +54,20 @@ SUMMARIZED_BINDING_PERTURBATION_COLUMN_METADATA = {
             "May be larger than rank due to ties."
         ),
     ),
-    "dto_fdr": (
-        "DTO FDR",
-        "False discovery rate from DTO.",
-    ),
-    "dto_empirical_pvalue": (
-        "DTO Empirical P-value",
-        "Empirical p-value from DTO.",
-    ),
     "rank_25": (
-        "Rank at 25",
+        "Percent responsive: Top 25 Binding Targets",
         "Responsive fraction in top 25 bound genes.",
     ),
-    "rank_50": (
-        "Rank at 50",
-        "Responsive fraction in top 50 bound genes.",
+}
+
+SUMMARIZED_BINDING_PERTURBATION_DATABASE_IDENTIFIER_COLUMN_METADATA = {
+    "single_binding": (
+        "Single binding",
+        "Number of single binding.",
+    ),
+    "composite_binding": (
+        "Composite binding",
+        "Number of composite binding.",
     ),
 }
 
@@ -78,10 +77,17 @@ SUMMARIZED_BINDING_PERTURBATION_CHOICES_DICT = {
     for key, (label, desc) in SUMMARIZED_BINDING_PERTURBATION_COLUMN_METADATA.items()
 }
 
+SUMMARIZED_BINDING_PERTURBATION_DATABASE_IDENTIFIER_CHOICES_DICT = {
+    key: ui.span(label, title=desc)
+    for key, (
+        label,
+        desc,
+    ) in SUMMARIZED_BINDING_PERTURBATION_DATABASE_IDENTIFIER_COLUMN_METADATA.items()
+}
+
 # Default selection for summarized binding-perturbation comparison table
 DEFAULT_SUMMARIZED_BINDING_PERTURBATION_COLUMNS = [
     "univariate_rsquared",
-    "dto_fdr",
     "dto_empirical_pvalue",
     "rank_25",
 ]
@@ -102,6 +108,7 @@ def summarized_binding_perturbation_comparison_server(
     expression_source: str,
     selected_promotersetsigs: reactive.value,
     selected_columns: reactive.calc,
+    selected_database_identifier_columns: reactive.calc,
     logger: Logger,
 ) -> None:
     """
@@ -111,6 +118,8 @@ def summarized_binding_perturbation_comparison_server(
     :param expression_source: The specific expression source to filter for
     :param selected_promotersetsigs: Reactive value containing selected promotersetsigs
     :param selected_columns: Reactive calc containing selected columns to display
+    :param selected_database_identifier_columns: Reactive calc containing selected
+        database identifier columns to display
     :param logger: Logger object
 
     """
@@ -130,10 +139,14 @@ def summarized_binding_perturbation_comparison_server(
 
         # Get selected columns from the accordion
         selected_cols = selected_columns()  # type: ignore
+        selected_db_id_cols = selected_database_identifier_columns()  # type: ignore
+
+        # Combine both column groups
+        all_selected_cols = list(selected_cols) + list(selected_db_id_cols)
 
         # Always include promotersetsig (needed for highlighting logic)
         columns_to_show = ["promotersetsig"] + [
-            col for col in selected_cols if col != "promotersetsig"
+            col for col in all_selected_cols if col != "promotersetsig"
         ]
 
         # Filter to only show columns that exist in the dataframe and are selected
@@ -175,10 +188,14 @@ def summarized_binding_perturbation_comparison_server(
                 existing_percentage_cols
             ].applymap(safe_percentage_format)
 
+        # Combine both metadata dictionaries for column naming
+        COMBINED_COLUMN_METADATA = {
+            **SUMMARIZED_BINDING_PERTURBATION_COLUMN_METADATA,
+            **SUMMARIZED_BINDING_PERTURBATION_DATABASE_IDENTIFIER_COLUMN_METADATA,
+        }
+
         # Apply friendly column names from metadata
-        df_local = apply_column_names(
-            df_local, SUMMARIZED_BINDING_PERTURBATION_COLUMN_METADATA
-        )
+        df_local = apply_column_names(df_local, COMBINED_COLUMN_METADATA)
 
         df_local.reset_index(drop=True, inplace=True)
 
