@@ -117,146 +117,160 @@ def individual_regulator_compare_ui():
                     "below.",
                 ),
                 ui.div(
-                    ui.h4("Rank Response Plots"),
-                    ui.p(
-                        ui.tags.strong("Overview:"),
-                        ui.br(),
-                        "Each solid line on a rank response plot shows a comparison "
-                        "of one binding dataset to one perturbation dataset. The genes "
-                        "are first ranked according to the strength of the perturbed "
-                        "TF's binding signal in their regulatory DNA.",
-                    ),
-                    ui.p(
-                        ui.tags.strong("Plot Axes:"),
-                        ui.br(),
-                        "The vertical axis shows the fraction of most strongly bound ",
-                        "genes that are responsive to the perturbation. Responsiveness "
-                        "is determined using a fixed threshold on the differential "
-                        "expression p-value and/or log fold change. The horizontal "
-                        "axis indicates the number of most strongly bound "
-                        "genes considered. For example, 20 on the horizontal axis "
-                        "indicates the 20 most strongly bound genes. There is no "
-                        "fixed threshold on binding strength.",
-                    ),
-                    ui.p(
-                        ui.tags.strong("Reference Lines:"),
-                        ui.br(),
-                        "The dashed horizontal "
-                        "line shows the random expectation – the fraction of all genes "
-                        "that are responsive. For example, a dashed line at 0.1 means "
-                        "that 10% of all genes are responsive to perturbation of this "
-                        "TF. The gray area shows a 95% confidence interval for the "
-                        "null hypothesis that the bound genes are no more responsive "
-                        "than the random expectation.",
-                    ),
-                    ui.br(),
-                    ui.div(
-                        ui.tags.strong("How to Use:"),
-                        " ",
-                        "Clicking on rows in the ",
-                        ui.tags.b("Replicate Selection Table"),
-                        " controls which binding datasets are plotted. Tabs at the "
-                        "top show plots for different perturbation datasets. The "
-                        "sidebar allows control over which columns are displayed in "
-                        "this table.",
-                        style="padding: 10px; background-color: #f8f9fa;"
-                        "border-left: 4px solid #007bff;"
-                        "margin: 10px 0;"
-                        "font-size: 0.9em;",
-                    ),
-                ),
-            ),
-            ui.row(
-                ui.column(
-                    7,
-                    ui.card(
-                        ui.card_header("Rank Response Plots"),
-                        ui.navset_tab(
-                            *[
-                                rr_plot_panel("TFKO", "tfko_plots"),
-                                rr_plot_panel("Overexpression", "overexpression_plots"),
-                            ],
-                            id="plot_tabs",
-                        ),
-                    ),
-                ),
-                ui.column(
-                    5,
-                    ui.card(
-                        ui.card_header("Replicate Selection Table"),
-                        ui.div(
-                            replicate_selection_table_ui("replicate_selection_table"),
-                            style="overflow: auto; width: 100%;",
-                        ),
-                        ui.card_footer(
-                            ui.p(
-                                ui.tags.b("How to use: "),
-                                "Select rows in this table to filter and highlight "
-                                "corresponding data in the summarized "
-                                "binding-perturbation comparison table and plots. "
-                                "Multiple rows can be selected by holding Ctrl/Cmd "
-                                "while clicking.",
-                                style="margin: 0; font-size: 0.9em; color: #666;",
-                            )
-                        ),
-                        style="display: flex; flex-direction: column; min-height: 0;",
-                    ),
-                ),
-                style="min-height: 600px; margin-bottom: 20px;",
-            ),
-            ui.div(
-                ui.card(
                     ui.accordion(
                         ui.accordion_panel(
-                            "Summarized Binding-Perturbation Comparisons",
+                            "Rank Response Plots",
                             ui.p(
                                 ui.tags.strong("Overview:"),
                                 ui.br(),
-                                "Each row of this table shows summary statistics "
-                                "for comparisons of one binding dataset (or replicate) "
-                                "to one perturbation-response dataset.",
+                                "Each solid line on a rank response plot shows a ",
+                                "comparison of one binding dataset to one perturbation "
+                                "dataset. The genes are first ranked according to the "
+                                "strength of the perturbed TF's binding signal in their"
+                                " regulatory DNA.",
                             ),
                             ui.p(
-                                ui.tags.strong("Navigation:"),
+                                ui.tags.strong("Plot Axes:"),
                                 ui.br(),
-                                "The tabs at the top show tables for different "
-                                "perturbation datasets. "
-                                "The sidebar allows control over which columns are "
-                                "displayed in this table.",
+                                "The vertical axis shows the fraction of most "
+                                "strongly bound genes that are responsive to the "
+                                "perturbation. Responsiveness is determined using a "
+                                "fixed threshold on the differential expression "
+                                "p-value and/or log fold change. The horizontal axis "
+                                "indicates the number of most strongly bound genes "
+                                "considered. For example, 20 on the horizontal axis "
+                                "indicates the 20 most strongly bound genes. There is "
+                                "no fixed threshold on binding strength.",
                             ),
                             ui.p(
-                                ui.tags.strong("Analysis Methods:"),
+                                ui.tags.strong("Reference Lines:"),
                                 ui.br(),
-                                "The statistics are derived from three methods of "
-                                "comparison:",
+                                "The dashed horizontal "
+                                "line shows the random expectation – the fraction of "
+                                "all genes that are responsive. For example, a dashed "
+                                "line at 0.1 means that 10% of all genes are "
+                                "responsive to perturbation of this TF. The gray area "
+                                "shows a 95% confidence interval for the null "
+                                "hypothesis that the bound genes are no more responsive"
+                                " than the random expectation.",
                             ),
-                            ui.tags.ol(
-                                ui.tags.li(
-                                    "Fraction responsive among the 25 or 50 most "
-                                    "strongly bound genes;"
-                                ),
-                                ui.tags.li(
-                                    "A linear model fit to predict the response "
-                                    "strength from the binding strength (",
-                                    ui.a("details here", href="#", target="_blank"),
-                                    ").",
-                                ),
-                                ui.tags.li(
-                                    "Dual Threshold Optimization (",
-                                    ui.a(
-                                        "details here",
-                                        href="#",
-                                        target="_blank",
-                                    ),
-                                    ").",
+                            ui.div(
+                                ui.tags.strong("How to Use:"),
+                                " ",
+                                "Clicking on rows in the ",
+                                ui.tags.b("Replicate Selection Table"),
+                                " controls which binding datasets are plotted. Tabs at "
+                                "the top show plots for different perturbation "
+                                "datasets. The sidebar allows control over which "
+                                "columns are displayed in this table.",
+                                style="padding: 10px; background-color: #f8f9fa; "
+                                "border-left: 4px solid #007bff; "
+                                "margin: 10px 0; "
+                                "font-size: 0.9em;",
+                            ),
+                        ),
+                        id="rank_response_plots_accordion",
+                        open=False,
+                    ),
+                    ui.br(),
+                    ui.row(
+                        ui.column(
+                            7,
+                            ui.card(
+                                ui.card_header("Rank Response Plots"),
+                                ui.navset_tab(
+                                    *[
+                                        rr_plot_panel("TFKO", "tfko_plots"),
+                                        rr_plot_panel(
+                                            "Overexpression", "overexpression_plots"
+                                        ),
+                                    ],
+                                    id="plot_tabs",
                                 ),
                             ),
                         ),
-                        id="summary_binding_perturbation_accordion",
-                        open=True,
+                        ui.column(
+                            5,
+                            ui.card(
+                                ui.card_header("Replicate Selection Table"),
+                                ui.div(
+                                    replicate_selection_table_ui(
+                                        "replicate_selection_table"
+                                    ),
+                                    style="overflow: auto; width: 100%;",
+                                ),
+                                ui.card_footer(
+                                    ui.p(
+                                        ui.tags.b("How to use: "),
+                                        "Select rows in this table to filter and "
+                                        "highlight corresponding data in the "
+                                        "summarized binding-perturbation comparison "
+                                        "table and plots. Multiple rows can be "
+                                        "selected by holding Ctrl/Cmd while clicking.",
+                                        style="margin: 0; font-size: 0.9em; "
+                                        "color: #666; padding: 10px;",
+                                    )
+                                ),
+                                style="display: flex; flex-direction: column; "
+                                "min-height: 0; padding: 10px;",
+                            ),
+                        ),
+                        style="min-height: 600px; margin-bottom: 20px;",
                     ),
                     style="margin-bottom: 1.5em;",
                 ),
+            ),
+            ui.div(
+                ui.accordion(
+                    ui.accordion_panel(
+                        "Summarized Binding-Perturbation Comparisons",
+                        ui.p(
+                            ui.tags.strong("Overview:"),
+                            ui.br(),
+                            "Each row of this table shows summary statistics "
+                            "for comparisons of one binding dataset (or replicate) "
+                            "to one perturbation-response dataset.",
+                        ),
+                        ui.p(
+                            ui.tags.strong("Navigation:"),
+                            ui.br(),
+                            "The tabs at the top show tables for different "
+                            "perturbation datasets. "
+                            "The sidebar allows control over which columns are "
+                            "displayed in this table.",
+                        ),
+                        ui.p(
+                            ui.tags.strong("Analysis Methods:"),
+                            ui.br(),
+                            "The statistics are derived from three methods of "
+                            "comparison:",
+                        ),
+                        ui.tags.ol(
+                            ui.tags.li(
+                                "Fraction responsive among the 25 or 50 most "
+                                "strongly bound genes;"
+                            ),
+                            ui.tags.li(
+                                "A linear model fit to predict the response "
+                                "strength from the binding strength (",
+                                ui.a("details here", href="#", target="_blank"),
+                                ").",
+                            ),
+                            ui.tags.li(
+                                "Dual Threshold Optimization (",
+                                ui.a(
+                                    "details here",
+                                    href="#",
+                                    target="_blank",
+                                ),
+                                ").",
+                            ),
+                        ),
+                    ),
+                    id="summary_binding_perturbation_accordion",
+                    open=False,
+                ),
+                ui.br(),
                 ui.card(
                     ui.card_header("Summarized Binding-Perturbation Comparison Table"),
                     ui.navset_tab(
