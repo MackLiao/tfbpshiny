@@ -6,6 +6,8 @@ from typing import Any
 
 from shiny import module, reactive, render, ui
 
+from tfbpshiny.utils.source_name_lookup import get_source_name_dict
+
 _MODULE_LABELS: dict[str, str] = {
     "binding": "Binding Analysis",
     "perturbation": "Perturbation Analysis",
@@ -25,6 +27,176 @@ def _module_type_filter(active_module: str, dataset: dict[str, Any]) -> bool:
     return False
 
 
+def _standard_sidebar_body() -> ui.Tag:
+    """Sidebar body for binding/perturbation analysis modules."""
+    return ui.div(
+        ui.div(
+            {"class": "mb-md"},
+            ui.div({"class": "group-header"}, "View Mode"),
+            ui.input_radio_buttons(
+                "view_mode",
+                label=None,
+                choices={
+                    "table": "Table",
+                    "correlation": "Correlation",
+                    "summary": "Summary",
+                    "compare": "Compare",
+                },
+                selected="table",
+            ),
+        ),
+        ui.div(
+            {"class": "mb-md"},
+            ui.div({"class": "group-header"}, "Dataset A"),
+            ui.input_select(
+                "selected_dataset",
+                label=None,
+                choices={},
+                width="100%",
+            ),
+        ),
+        ui.div(
+            {"class": "mb-md"},
+            ui.div({"class": "group-header"}, "Pairwise"),
+            ui.input_switch(
+                "comparison_mode",
+                label="Comparison mode",
+                value=False,
+            ),
+            ui.input_select(
+                "comparison_dataset",
+                label="Dataset B",
+                choices={},
+                width="100%",
+            ),
+            ui.div(
+                {"style": "display:flex; gap:8px; margin-top:8px;"},
+                ui.input_action_button(
+                    "swap_datasets",
+                    "Swap",
+                    class_="btn btn-sm btn-outline-secondary",
+                ),
+                ui.input_action_button(
+                    "exit_comparison",
+                    "Exit",
+                    class_="btn btn-sm btn-outline-secondary",
+                ),
+            ),
+        ),
+        ui.div(
+            {"class": "mb-md"},
+            ui.div({"class": "group-header"}, "Correlation Settings"),
+            ui.input_select(
+                "correlation_value_column",
+                label="Value column",
+                choices={
+                    "effect_size": "effect_size",
+                    "score": "score",
+                    "p_value": "p_value",
+                    "confidence": "confidence",
+                    "time_min": "time_min",
+                },
+                selected="effect_size",
+                width="100%",
+            ),
+            ui.input_select(
+                "correlation_group_by",
+                label="Group by",
+                choices={
+                    "regulator": "Regulator",
+                    "target": "Target",
+                    "sample": "Sample",
+                },
+                selected="regulator",
+                width="100%",
+            ),
+        ),
+        ui.div(
+            {"class": "mb-md"},
+            ui.div({"class": "group-header"}, "Filters"),
+            ui.input_slider(
+                "p_value",
+                "Max p-value",
+                min=0.001,
+                max=1.0,
+                value=0.05,
+                step=0.001,
+            ),
+            ui.input_numeric(
+                "log2fc_threshold",
+                "Min |log2FC|",
+                value=1.0,
+                min=0,
+                max=10,
+                step=0.1,
+            ),
+        ),
+    )
+
+
+def _composite_sidebar_static() -> ui.Tag:
+    """Static controls for the composite sidebar (method, filter, logic)."""
+    return ui.div(
+        ui.div(
+            {"class": "mb-md"},
+            ui.div({"class": "group-header"}, "Comparison Method"),
+            ui.input_radio_buttons(
+                "composite_method",
+                label=None,
+                choices={
+                    "dto": "DTO",
+                    "rank_response_pvalue": "Rank Response",
+                    "univariate_pvalue": "Univariate P-value",
+                },
+                selected="dto",
+            ),
+        ),
+        ui.div(
+            {"class": "mb-md"},
+            ui.div({"class": "group-header"}, "Binding Sources"),
+            ui.output_ui("composite_binding_choices"),
+        ),
+        ui.div(
+            {"class": "mb-md"},
+            ui.div({"class": "group-header"}, "Perturbation Sources"),
+            ui.output_ui("composite_perturbation_choices"),
+        ),
+        ui.div(
+            {"class": "mb-md"},
+            ui.div({"class": "group-header"}, "Filter"),
+            ui.div(
+                {"style": "display:flex; gap:8px; align-items:flex-end;"},
+                ui.div(
+                    {"style": "flex:0 0 auto;"},
+                    ui.input_select(
+                        "composite_filter_operator",
+                        label="Operator",
+                        choices={
+                            "<": "<",
+                            "<=": "<=",
+                            ">": ">",
+                            ">=": ">=",
+                        },
+                        selected="<",
+                        width="80px",
+                    ),
+                ),
+                ui.div(
+                    {"style": "flex:1;"},
+                    ui.input_numeric(
+                        "composite_filter_threshold",
+                        "Threshold",
+                        value=0.5,
+                        min=0,
+                        max=1.0,
+                        step=0.001,
+                    ),
+                ),
+            ),
+        ),
+    )
+
+
 @module.ui
 def analysis_sidebar_ui() -> ui.Tag:
     """Render the analysis sidebar panel."""
@@ -37,115 +209,7 @@ def analysis_sidebar_ui() -> ui.Tag:
         ),
         ui.div(
             {"class": "sidebar-body"},
-            ui.div(
-                {"class": "mb-md"},
-                ui.div({"class": "group-header"}, "View Mode"),
-                ui.input_radio_buttons(
-                    "view_mode",
-                    label=None,
-                    choices={
-                        "table": "Table",
-                        "correlation": "Correlation",
-                        "summary": "Summary",
-                        "compare": "Compare",
-                    },
-                    selected="table",
-                ),
-            ),
-            ui.div(
-                {"class": "mb-md"},
-                ui.div({"class": "group-header"}, "Dataset A"),
-                ui.input_select(
-                    "selected_dataset",
-                    label=None,
-                    choices={},
-                    width="100%",
-                ),
-            ),
-            ui.div(
-                {"class": "mb-md"},
-                ui.div({"class": "group-header"}, "Pairwise"),
-                ui.input_switch(
-                    "comparison_mode",
-                    label="Comparison mode",
-                    value=False,
-                ),
-                ui.input_select(
-                    "comparison_dataset",
-                    label="Dataset B",
-                    choices={},
-                    width="100%",
-                ),
-                ui.div(
-                    {"style": "display:flex; gap:8px; margin-top:8px;"},
-                    ui.input_action_button(
-                        "swap_datasets",
-                        "Swap",
-                        class_="btn btn-sm btn-outline-secondary",
-                    ),
-                    ui.input_action_button(
-                        "exit_comparison",
-                        "Exit",
-                        class_="btn btn-sm btn-outline-secondary",
-                    ),
-                ),
-            ),
-            ui.div(
-                {"class": "mb-md"},
-                ui.div({"class": "group-header"}, "Correlation Settings"),
-                ui.input_select(
-                    "correlation_value_column",
-                    label="Value column",
-                    choices={
-                        "effect_size": "effect_size",
-                        "score": "score",
-                        "p_value": "p_value",
-                        "confidence": "confidence",
-                        "time_min": "time_min",
-                    },
-                    selected="effect_size",
-                    width="100%",
-                ),
-                ui.input_select(
-                    "correlation_group_by",
-                    label="Group by",
-                    choices={
-                        "regulator": "Regulator",
-                        "target": "Target",
-                        "sample": "Sample",
-                    },
-                    selected="regulator",
-                    width="100%",
-                ),
-            ),
-            ui.div(
-                {"class": "mb-md"},
-                ui.div({"class": "group-header"}, "Filters"),
-                ui.input_slider(
-                    "p_value",
-                    "Max p-value",
-                    min=0.001,
-                    max=1.0,
-                    value=0.05,
-                    step=0.001,
-                ),
-                ui.input_numeric(
-                    "log2fc_threshold",
-                    "Min |log2FC|",
-                    value=1.0,
-                    min=0,
-                    max=10,
-                    step=0.1,
-                ),
-            ),
-        ),
-        ui.div(
-            {"class": "sidebar-footer"},
-            ui.input_action_button(
-                "update_view",
-                "Update View",
-                class_="btn btn-primary btn-sm w-100",
-            ),
+            ui.output_ui("sidebar_body_content"),
         ),
     )
 
@@ -172,6 +236,62 @@ def analysis_sidebar_server(
     def _set_config_if_changed(next_config: dict[str, Any]) -> None:
         if next_config != analysis_config():
             analysis_config.set(next_config)
+
+    @render.ui
+    def sidebar_body_content() -> ui.Tag:
+        if active_module() == "composite":
+            return _composite_sidebar_static()
+        return _standard_sidebar_body()
+
+    @render.ui
+    def composite_binding_choices() -> ui.Tag:
+        selected = [d for d in datasets() if d.get("selected")]
+        binding = [d for d in selected if d.get("type") == "Binding"]
+        if not binding:
+            return ui.p(
+                {"style": "font-size:12px; color:var(--color-text-muted);"},
+                "No binding datasets in active set.",
+            )
+        # Get source name mapping for binding sources
+        source_name_map = get_source_name_dict(datatype="binding")
+        choices = {}
+        for d in binding:
+            db_name = str(d["db_name"])
+            source_key = str(d.get("source_key", ""))
+            # Use source display name if available, otherwise fall back to dataset name
+            display_name = source_name_map.get(source_key, d.get("name", db_name))
+            choices[db_name] = display_name
+        return ui.input_checkbox_group(
+            "composite_binding_datasets",
+            label=None,
+            choices=choices,
+            selected=list(choices.keys()),
+        )
+
+    @render.ui
+    def composite_perturbation_choices() -> ui.Tag:
+        selected = [d for d in datasets() if d.get("selected")]
+        perturbation = [d for d in selected if d.get("type") == "Perturbation"]
+        if not perturbation:
+            return ui.p(
+                {"style": "font-size:12px; color:var(--color-text-muted);"},
+                "No perturbation datasets in active set.",
+            )
+        # Get source name mapping for perturbation sources
+        source_name_map = get_source_name_dict(datatype="perturbation_response")
+        choices = {}
+        for d in perturbation:
+            db_name = str(d["db_name"])
+            source_key = str(d.get("source_key", ""))
+            # Use source display name if available, otherwise fall back to dataset name
+            display_name = source_name_map.get(source_key, d.get("name", db_name))
+            choices[db_name] = display_name
+        return ui.input_checkbox_group(
+            "composite_perturbation_datasets",
+            label=None,
+            choices=choices,
+            selected=list(choices.keys()),
+        )
 
     @render.ui
     def sidebar_title() -> ui.Tag:
@@ -211,7 +331,7 @@ def analysis_sidebar_server(
 
     @reactive.effect
     def _sync_controls_from_config() -> None:
-        if active_module() == "selection":
+        if active_module() in ("selection", "composite"):
             return
 
         config = analysis_config()
@@ -236,7 +356,7 @@ def analysis_sidebar_server(
 
     @reactive.effect
     def _update_dataset_choices() -> None:
-        if active_module() == "selection":
+        if active_module() in ("selection", "composite"):
             return
 
         relevant = _relevant_datasets()
@@ -284,8 +404,47 @@ def analysis_sidebar_server(
         _set_config_if_changed(next_config)
 
     @reactive.effect
+    def _sync_composite_config() -> None:
+        if active_module() != "composite":
+            return
+
+        current_config = dict(analysis_config())
+
+        try:
+            method = str(input.composite_method())
+            threshold = float(input.composite_filter_threshold())
+            operator = str(input.composite_filter_operator())
+        except Exception:
+            return
+
+        # Read checkbox selections; fall back to current config if not yet rendered.
+        try:
+            bd_selected = list(input.composite_binding_datasets() or [])
+        except Exception:
+            bd_selected = list(current_config.get("composite_binding_datasets", []))
+
+        try:
+            pr_selected = list(input.composite_perturbation_datasets() or [])
+        except Exception:
+            pr_selected = list(
+                current_config.get("composite_perturbation_datasets", [])
+            )
+
+        next_config = dict(current_config)
+        next_config.update(
+            {
+                "composite_method": method,
+                "composite_filter_threshold": threshold,
+                "composite_filter_operator": operator,
+                "composite_binding_datasets": bd_selected,
+                "composite_perturbation_datasets": pr_selected,
+            }
+        )
+        _set_config_if_changed(next_config)
+
+    @reactive.effect
     def _sync_config() -> None:
-        if active_module() == "selection":
+        if active_module() == "selection" or active_module() == "composite":
             return
 
         current_config = dict(analysis_config())

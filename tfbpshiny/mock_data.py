@@ -38,6 +38,7 @@ _DATASET_BLUEPRINTS: list[dict[str, Any]] = [
         "sample_count": 9,
         "type_hint": "binding",
         "source": "Harbison et al.",
+        "source_key": "harbison_chip",
     },
     {
         "id": "bd-002",
@@ -49,6 +50,7 @@ _DATASET_BLUEPRINTS: list[dict[str, Any]] = [
         "sample_count": 8,
         "type_hint": "binding",
         "source": "Hu et al.",
+        "source_key": "brent_nf_cc",
     },
     {
         "id": "bd-003",
@@ -60,6 +62,7 @@ _DATASET_BLUEPRINTS: list[dict[str, Any]] = [
         "sample_count": 10,
         "type_hint": "binding",
         "source": "Kemmeren et al.",
+        "source_key": "chipexo_pugh_allevents",
     },
     {
         "id": "bd-004",
@@ -71,6 +74,7 @@ _DATASET_BLUEPRINTS: list[dict[str, Any]] = [
         "sample_count": 11,
         "type_hint": "binding",
         "source": "Brent Lab",
+        "source_key": "chipexo_pugh_allevents",
     },
     {
         "id": "pr-001",
@@ -82,6 +86,7 @@ _DATASET_BLUEPRINTS: list[dict[str, Any]] = [
         "sample_count": 12,
         "type_hint": "perturbation",
         "source": "Kemmeren et al.",
+        "source_key": "kemmeren_tfko",
     },
     {
         "id": "pr-002",
@@ -93,6 +98,7 @@ _DATASET_BLUEPRINTS: list[dict[str, Any]] = [
         "sample_count": 11,
         "type_hint": "perturbation",
         "source": "Hu et al.",
+        "source_key": "hu_reimann_tfko",
     },
     {
         "id": "pr-003",
@@ -104,6 +110,7 @@ _DATASET_BLUEPRINTS: list[dict[str, Any]] = [
         "sample_count": 10,
         "type_hint": "perturbation",
         "source": "McIsaac et al.",
+        "source_key": "mcisaac_oe",
     },
     {
         "id": "pr-004",
@@ -115,6 +122,7 @@ _DATASET_BLUEPRINTS: list[dict[str, Any]] = [
         "sample_count": 13,
         "type_hint": "perturbation",
         "source": "Brent Lab",
+        "source_key": "kemmeren_tfko",
     },
     {
         "id": "pr-005",
@@ -126,6 +134,7 @@ _DATASET_BLUEPRINTS: list[dict[str, Any]] = [
         "sample_count": 10,
         "type_hint": "perturbation",
         "source": "Brent Lab",
+        "source_key": "mcisaac_oe",
     },
     {
         "id": "pr-006",
@@ -137,6 +146,7 @@ _DATASET_BLUEPRINTS: list[dict[str, Any]] = [
         "sample_count": 9,
         "type_hint": "perturbation",
         "source": "Hackett et al.",
+        "source_key": "hahn_degron",
     },
 ]
 
@@ -959,6 +969,95 @@ def get_mock_pairwise_comparison(
 # ---------------------------------------------------------------------------
 # Backward-compatible intersection helper
 # ---------------------------------------------------------------------------
+
+
+def _clamp01(value: float) -> float:
+    return max(0.0, min(1.0, value))
+
+
+def get_mock_composite_data(
+    binding_db_names: list[str],
+    perturbation_db_names: list[str],
+    name_map: dict[str, str] | None = None,
+) -> list[dict[str, Any]]:
+    """
+    Generate composite comparison data for all binding-perturbation pairs.
+
+    Returns one row per (TF, target_gene) per (binding, perturbation) pair.
+    ``binding_source`` and ``expression_source`` columns contain display-ready
+    names resolved via *name_map* (falls back to *db_name* when absent).
+
+    Each metric has a distinct distribution:
+      - dto: Beta-shaped, mostly low values with some high outliers
+      - rank_response_pvalue: Roughly uniform with a spike near 0
+      - univariate_pvalue: Strongly right-skewed (many small, few large)
+
+    A pair-level shift is applied so different (binding, perturbation)
+    combinations produce visibly different distributions.
+
+    """
+    rows: list[dict[str, Any]] = []
+    _names = name_map or {}
+
+    for bd_name in binding_db_names:
+        bd_label = _names.get(bd_name, bd_name)
+        bd_measurements = _MOCK_MEASUREMENTS_BY_TABLE.get(bd_name, [])
+        bd_tfs = {str(r["regulator_symbol"]) for r in bd_measurements}
+        bd_targets = {str(r["target_symbol"]) for r in bd_measurements}
+
+        for pr_name in perturbation_db_names:
+            pr_label = _names.get(pr_name, pr_name)
+            pr_measurements = _MOCK_MEASUREMENTS_BY_TABLE.get(pr_name, [])
+            pr_tfs = {str(r["regulator_symbol"]) for r in pr_measurements}
+            pr_targets = {str(r["target_symbol"]) for r in pr_measurements}
+
+            common_tfs = sorted(bd_tfs & pr_tfs)
+            common_targets = sorted(bd_targets & pr_targets)
+            if not common_tfs or not common_targets:
+                continue
+
+            rng = random.Random(_seed_for(f"composite::{bd_name}::{pr_name}"))
+
+            # Per-pair shift so distributions differ across combinations.
+            dto_alpha = rng.uniform(1.5, 4.0)
+            dto_beta = rng.uniform(2.0, 6.0)
+            rr_spike_prob = rng.uniform(0.15, 0.45)
+            uv_scale = rng.uniform(0.02, 0.12)
+
+            # Sample a subset of targets per TF for realistic density.
+            for tf in common_tfs:
+                n_targets = rng.randint(
+                    min(8, len(common_targets)),
+                    min(30, len(common_targets)),
+                )
+                targets = rng.sample(common_targets, k=n_targets)
+
+                for target in targets:
+                    # DTO: Beta distribution — mostly low, some high.
+                    dto = _clamp01(rng.betavariate(dto_alpha, dto_beta))
+
+                    # Rank response p-value: mixture of spike near 0 + uniform.
+                    if rng.random() < rr_spike_prob:
+                        rr = _clamp01(abs(rng.gauss(0.0, 0.08)))
+                    else:
+                        rr = rng.uniform(0.0, 1.0)
+
+                    # Univariate p-value: exponential-ish, right-skewed.
+                    uv = _clamp01(rng.expovariate(1.0 / uv_scale))
+
+                    rows.append(
+                        {
+                            "regulator_symbol": tf,
+                            "target_gene": target,
+                            "binding_source": bd_label,
+                            "expression_source": pr_label,
+                            "dto": round(dto, 6),
+                            "rank_response_pvalue": round(rr, 6),
+                            "univariate_pvalue": round(uv, 6),
+                        }
+                    )
+
+    return rows
 
 
 def compute_mock_intersection(

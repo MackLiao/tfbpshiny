@@ -2,17 +2,34 @@
 
 from __future__ import annotations
 
+import operator as op
 from typing import Any
 
 import pandas as pd
 from shiny import module, reactive, render, ui
 
 from tfbpshiny.mock_data import (
+    get_mock_composite_data,
     get_mock_correlation,
     get_mock_pairwise_comparison,
     get_mock_source_summary,
     get_mock_table_data,
 )
+from tfbpshiny.utils.create_distribution_plot import create_distribution_plot
+from tfbpshiny.utils.source_name_lookup import get_source_name_dict
+
+_COMPOSITE_METHOD_LABELS: dict[str, str] = {
+    "dto": "DTO",
+    "rank_response_pvalue": "Rank Response P-value",
+    "univariate_pvalue": "Univariate P-value",
+}
+
+_OPERATOR_MAP: dict[str, Any] = {
+    "<": op.lt,
+    "<=": op.le,
+    ">": op.gt,
+    ">=": op.ge,
+}
 
 _MODULE_LABELS: dict[str, str] = {
     "binding": "Binding",
@@ -95,6 +112,13 @@ def analysis_workspace_server(
     @render.ui
     def workspace_title() -> ui.Tag:
         module_name = active_module()
+
+        if module_name == "composite":
+            config = analysis_config()
+            method = str(config.get("composite_method", "dto"))
+            method_label = _COMPOSITE_METHOD_LABELS.get(method, method)
+            return ui.h1(f"Composite - {method_label}")
+
         module_label = _MODULE_LABELS.get(module_name, "Analysis")
         view = str(analysis_config().get("view", "table")).capitalize()
 
@@ -104,6 +128,11 @@ def analysis_workspace_server(
 
     @render.ui
     def workspace_content() -> ui.Tag:
+        module_name = active_module()
+
+        if module_name == "composite":
+            return _render_composite(analysis_config(), datasets())
+
         config = analysis_config()
         view = str(config.get("view", "table"))
 
@@ -154,6 +183,114 @@ def analysis_workspace_server(
             )
 
         return ui.div({"class": "empty-state"}, ui.p("Unknown view mode."))
+
+
+def _render_composite(
+    config: dict[str, Any],
+    all_datasets: list[dict[str, Any]],
+) -> ui.Tag:
+    """Render the composite analysis view with faceted boxplots."""
+    # Resolve which datasets to use from sidebar checkboxes.
+    bd_checked = config.get("composite_binding_datasets")
+    pr_checked = config.get("composite_perturbation_datasets")
+
+    selected = [d for d in all_datasets if d.get("selected")]
+
+    if isinstance(bd_checked, list) and bd_checked:
+        bd_names = [str(n) for n in bd_checked]
+    else:
+        bd_names = [str(d["db_name"]) for d in selected if d.get("type") == "Binding"]
+
+    if isinstance(pr_checked, list) and pr_checked:
+        pr_names = [str(n) for n in pr_checked]
+    else:
+        pr_names = [
+            str(d["db_name"]) for d in selected if d.get("type") == "Perturbation"
+        ]
+
+    if not bd_names or not pr_names:
+        return ui.div(
+            {"class": "empty-state"},
+            ui.h3("Select binding and perturbation datasets"),
+            ui.p(
+                "Check at least one binding and one perturbation "
+                "dataset in the sidebar."
+            ),
+        )
+
+    method = str(config.get("composite_method", "dto"))
+    threshold = float(config.get("composite_filter_threshold", 0.5))
+    operator_str = str(config.get("composite_filter_operator", "<"))
+    compare_fn = _OPERATOR_MAP.get(operator_str, op.lt)
+    method_label = _COMPOSITE_METHOD_LABELS.get(method, method)
+
+    # Build source name mapping for display
+    source_name_map = get_source_name_dict()
+    name_map = {}
+    for d in selected:
+        source_key = str(d.get("source_key", ""))
+        db_name = str(d.get("db_name", ""))
+        name_map[db_name] = source_name_map.get(source_key, db_name)
+
+    raw = get_mock_composite_data(bd_names, pr_names, name_map=name_map)
+    if not raw:
+        return ui.div(
+            {"class": "empty-state"},
+            ui.h3("No data available"),
+            ui.p("No overlapping TFs found between the selected datasets."),
+        )
+
+    df = pd.DataFrame(raw)
+
+    # Apply filter: identify TFs that pass in at least one perturbation.
+    df["passes"] = df[method].apply(lambda v: compare_fn(v, threshold))
+
+    passing_tfs = df.groupby("regulator_symbol")["passes"].any().loc[lambda s: s].index
+
+    # Mask DTO values that don't pass the threshold (set to NA so they don't
+    # appear in plot)
+    df.loc[~df["passes"], method] = pd.NA
+
+    filtered = df[df["regulator_symbol"].isin(passing_tfs)]
+
+    if filtered.empty:
+        return ui.div(
+            {"class": "empty-state"},
+            ui.h3("No TFs pass the current filter"),
+            ui.p(
+                f"No TFs have {method_label} {operator_str} {threshold}. "
+                "Try relaxing the threshold."
+            ),
+        )
+
+    try:
+        fig = create_distribution_plot(
+            filtered, y_column=method, y_axis_title=method_label
+        )
+        plot_html = fig.to_html(full_html=False, include_plotlyjs="cdn")
+    except Exception as e:
+        return ui.div(
+            {"class": "empty-state"},
+            ui.h3("Error rendering plot"),
+            ui.p(f"Error: {str(e)}"),
+        )
+
+    status_text = (
+        f"Showing {method_label} | "
+        f"Filter: {operator_str} {threshold} | "
+        f"{len(bd_names)} binding x {len(pr_names)} perturbation"
+    )
+
+    return ui.div(
+        ui.div(
+            {
+                "style": "margin-bottom: 8px; font-size: 13px; "
+                "color: var(--color-text-muted);"
+            },
+            ui.span(status_text),
+        ),
+        ui.HTML(plot_html),
+    )
 
 
 def _render_table(
