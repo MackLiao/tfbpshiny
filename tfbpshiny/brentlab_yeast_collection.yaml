@@ -1,0 +1,181 @@
+repositories:
+  BrentLab/callingcards:
+    regulator_locus_tag:
+      field: regulator_locus_tag
+    regulator_symbol:
+      field: regulator_symbol
+    carbon_source:
+      path: experimental_conditions.media.carbon_source.compound
+    temperature_celsius:
+      path: experimental_conditions.temperature_celsius
+    dataset:
+      # binding
+      annotated_features:
+        db_name: cc_replicate_db
+        sample_id:
+          field: id
+      annotated_features_combined:
+        db_name: cc_combined_db
+        sample_id:
+          field: genome_map_id_set
+      annotated_features_orig_reprocess:
+        db_name: cc_replicate_repro
+        sample_id:
+          field: id
+        carbon_source:
+          field: condition
+          path: media.carbon_source.compound
+
+  BrentLab/harbison_2004:
+    dataset:
+      # binding
+      harbison_2004:
+        db_name: harbison
+        sample_id:
+          field: sample_id
+        carbon_source:
+          field: condition
+          path: media.carbon_source.compound
+        temperature_celsius:
+          field: condition
+          path: temperature_celsius
+          dtype: numeric
+        regulator_locus_tag:
+          field: regulator_locus_tag
+        regulator_symbol:
+          field: regulator_symbol
+
+  BrentLab/rossi_2021:
+    # binding
+    carbon_source:
+      path: experimental_conditions.media.carbon_source.compound
+    temperature_celsius:
+      path: experimental_conditions.temperature_celsius
+    dataset:
+      rossi_2021_af_combined:
+        sample_id:
+          field: sample_id
+        regulator_locus_tag:
+          field: regulator_locus_tag
+        target_locus_tag:
+          field: target_locus_tag
+
+  BrentLab/mahendrawada_2025:
+    temperature_celsius:
+      path: experimental_conditions.temperature_celsius
+    dataset:
+      # binding
+      chec_mahendrawada_m2025_af_combined:
+        sample_id:
+          field: sample_id
+        regulator_locus_tag:
+          field: regulator_locus_tag
+        regulator_symbol:
+          field: regulator_symbol
+
+  BrentLab/hu_2007_reimand_2010:
+      # binding
+      hu_2007_reimand_2010:
+        sample_id:
+          field: sample_id
+        carbon_source:
+          path: experimental_conditions.media.carbon_source.compoun
+        temperature_celsius:
+          path: experimental_conditions.temperature_celsius
+          dtype: numeric
+        regulator_locus_tag:
+          field: regulator_locus_tag
+        regulator_symbol:
+          field: regulator_symbol
+
+
+  BrentLab/hughes_2006:
+    dataset:
+      # perturbation
+      overexpression:
+        sample_id:
+          field: sample_id
+        carbon_source:
+          path: experimental_conditions.media.carbon_source.compound
+        temperature_celsius:
+          path: experimental_conditions.temperature_celsius
+        regulator_locus_tag:
+          field: regulator_locus_tag
+        regulator_symbol:
+          field: regulator_symbol
+      # perturbation
+      knockout:
+        sample_id:
+          field: sample_id
+        carbon_source:
+          path: experimental_conditions.media.carbon_source.compound
+        temperature_celsius:
+          path: experimental_conditions.temperature_celsius
+        regulator_locus_tag:
+          field: regulator_locus_tag
+        regulator_symbol:
+          field: regulator_symbol
+
+  BrentLab/kemmeren_2014:
+    dataset:
+      # perturbation
+      kemmeren_2014:
+        db_name: kemmeren
+        sample_id:
+          field: sample_id
+        carbon_source:
+          path: experimental_conditions.media.carbon_source.compound
+        temperature_celsius:
+          path: experimental_conditions.temperature_celsius
+        regulator_locus_tag:
+          field: regulator_locus_tag
+        regulator_symbol:
+          field: regulator_symbol
+
+  BrentLab/hackett_2020:
+    dataset:
+      # perturbation
+      hackett_2020:
+        db_name: hackett
+        sample_id:
+          field: sample_id
+        carbon_source:
+          path: experimental_conditions.media.carbon_source.compound
+        temperature_celsius:
+          path: experimental_conditions.temperature_celsius
+          dtype: numeric
+        regulator_locus_tag:
+          field: regulator_locus_tag
+        regulator_symbol:
+          field: regulator_symbol
+
+  BrentLab/yeast_comparative_analysis:
+    dataset:
+      dto:
+        dto_pvalue:
+          field: dto_empirical_pvalue
+        dto_fdr:
+          field: dto_fdr
+        links:
+          binding_id:
+            - [BrentLab/harbison_2004, harbison_2004]
+            - [BrentLab/rossi_2021, rossi_2021_af_combined]
+            - [BrentLab/mahendrawada_2025, chec_mahendrawada_m2025_af_combined]
+          perturbation_id:
+            - [BrentLab/kemmeren_2014, kemmeren_2014]
+            - [BrentLab/hackett_2020, hackett_2020]
+            - [BrentLab/hughes_2006, overexpression]
+            - [BrentLab/hughes_2006, knockout]
+
+factor_aliases:
+  carbon_source:
+    glucose: [D-glucose, dextrose, glu]
+    galactose: [D-galactose, gal]
+    raffinose: [D-raffinose]
+
+missing_value_labels:
+  carbon_source: unspecified
+
+description:
+  carbon_source: The carbon source provided during growth
+  temperature_celsius: Growth temperature in degrees Celsius

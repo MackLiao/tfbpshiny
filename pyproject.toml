@@ -8,7 +8,7 @@ readme = "README.md"
 
 [tool.poetry.dependencies]
 python = "^3.11"
-tfbpapi = {git = "https://github.com/cmatKhan/tfbpapi.git", rev = "dev"}
+tfbpapi = {git = "https://github.com/BrentLab/tfbpapi.git", rev = "dev"}
 shiny = "^1.4.0"
 shinywidgets = "^0.5.2"
 upsetjs-jupyter-widget = "^1.9.0"
