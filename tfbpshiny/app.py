@@ -14,11 +14,13 @@ from shiny import App, reactive, render, ui
 
 from configure_logger import configure_logger
 from tfbpshiny.data_service import (
+    get_column_count,
     get_datasets,
     get_filter_options,
     get_intersection_cells,
     get_or_create_vdb,
     get_row_count,
+    get_sample_count,
 )
 from tfbpshiny.modules.analysis_sidebar import (
     analysis_sidebar_server,
@@ -307,28 +309,41 @@ def app_server(
         try:
             vdb = get_or_create_vdb(selected_db_names)
 
-            row_counts: dict[str, int | None] = {}
+            sample_counts: dict[str, int | None] = {}
+            column_counts: dict[str, int | None] = {}
             for entry in selected:
                 dataset_id = str(entry["id"])
                 db_name = str(entry.get("db_name") or entry.get("dbName"))
+                dataset_type = str(entry.get("type", ""))
                 try:
-                    row_counts[dataset_id] = int(get_row_count(db_name, vdb))
+                    # For binding datasets, count distinct samples.
+                    # For perturbation datasets, each row is a sample.
+                    if dataset_type == "Binding":
+                        sample_counts[dataset_id] = int(get_sample_count(db_name, vdb))
+                    else:
+                        sample_counts[dataset_id] = int(get_row_count(db_name, vdb))
+                    column_counts[dataset_id] = int(get_column_count(db_name, vdb))
                 except Exception:
-                    row_counts[dataset_id] = None
+                    sample_counts[dataset_id] = None
+                    column_counts[dataset_id] = None
 
             updated_datasets = []
             for entry in datasets():
                 dataset_id = str(entry["id"])
-                count = row_counts.get(dataset_id)
-                if count is None:
+                sample_count = sample_counts.get(dataset_id)
+                column_count = column_counts.get(dataset_id)
+                if sample_count is None:
                     updated_datasets.append(entry)
                     continue
 
                 next_entry = dict(entry)
-                next_entry["sample_count"] = count
-                next_entry["sampleCount"] = count
+                next_entry["sample_count"] = sample_count
+                next_entry["sampleCount"] = sample_count
                 next_entry["sample_count_known"] = True
                 next_entry["sampleCountKnown"] = True
+                if column_count is not None:
+                    next_entry["column_count"] = column_count
+                    next_entry["columnCount"] = column_count
                 updated_datasets.append(next_entry)
 
             payloads = _selected_filter_payloads()

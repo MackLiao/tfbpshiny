@@ -354,15 +354,39 @@ def get_filter_options(
 
 
 # ---------------------------------------------------------------------------
-# 4. get_row_count  (replaces get_mock_row_count)
+# 4. get_row_count and get_sample_count  (replaces get_mock_row_count)
 # ---------------------------------------------------------------------------
 
 
 def get_row_count(db_name: str, vdb: VirtualDB) -> int:
-    """Return the row count for a dataset's metadata table."""
+    """Return the measurement count for a dataset's metadata table."""
     safe_table = _validate_identifier(f"{db_name}_meta")
     result = vdb.query(f"SELECT COUNT(*) AS cnt FROM {safe_table}")
     return int(result["cnt"].iloc[0]) if len(result) else 0
+
+
+def get_sample_count(db_name: str, vdb: VirtualDB) -> int:
+    """
+    Return the sample count (distinct sample_id) for a dataset.
+
+    For binding datasets where multiple measurements exist per sample, this returns the
+    unique sample count instead of measurement count.
+
+    """
+    safe_table = _validate_identifier(f"{db_name}_meta")
+    result = vdb.query(f"SELECT COUNT(DISTINCT sample_id) AS cnt FROM {safe_table}")
+    return int(result["cnt"].iloc[0]) if len(result) else 0
+
+
+def get_column_count(db_name: str, vdb: VirtualDB) -> int:
+    """Return the column count for a dataset's metadata table."""
+    safe_table = _validate_identifier(f"{db_name}_meta")
+    try:
+        desc_df = vdb.describe(safe_table)
+        return len(desc_df)
+    except Exception:
+        logger.warning("Cannot describe table %s", safe_table, exc_info=True)
+        return 0
 
 
 # ---------------------------------------------------------------------------
