@@ -13,12 +13,12 @@ from dotenv import load_dotenv
 from shiny import App, reactive, render, ui
 
 from configure_logger import configure_logger
-from tfbpshiny.mock_data import (
-    get_mock_datasets,
-    get_mock_filter_options,
-    get_mock_intersection_cells,
-    get_mock_row_count,
-    sync_mock_active_set_config,
+from tfbpshiny.data_service import (
+    get_datasets,
+    get_filter_options,
+    get_intersection_cells,
+    get_or_create_vdb,
+    get_row_count,
 )
 from tfbpshiny.modules.analysis_sidebar import (
     analysis_sidebar_server,
@@ -154,7 +154,7 @@ def app_server(
 
     # -- Initialization --
     try:
-        datasets.set(get_mock_datasets())
+        datasets.set(get_datasets())
         datasets_error.set(None)
     except Exception as error:
         datasets.set([])
@@ -243,13 +243,18 @@ def app_server(
 
         options: list[dict[str, Any]] = []
         try:
-            selected_ids = [str(entry["id"]) for entry in _selected_datasets()]
-            sync_ids = sorted(set(selected_ids + [dataset_id]))
-            sync_mock_active_set_config(sync_ids)
-
             dataset = _dataset_by_id(dataset_id)
             if not dataset:
                 raise ValueError("Dataset no longer available")
+
+            # Build a VirtualDB containing at least this dataset.
+            selected = _selected_datasets()
+            selected_db_names = [
+                str(e.get("db_name") or e.get("dbName")) for e in selected
+            ]
+            ds_db_name = str(dataset.get("db_name") or dataset.get("dbName"))
+            all_db_names = sorted(set(selected_db_names + [ds_db_name]))
+            vdb = get_or_create_vdb(all_db_names)
 
             metadata_configs = (
                 dataset.get("metadata_configs") or dataset.get("metadataConfigs") or []
@@ -260,9 +265,9 @@ def app_server(
                     or metadata_configs[0].get("db_name")
                 )
             else:
-                meta_table = f"{dataset.get('db_name')}_meta"
+                meta_table = f"{ds_db_name}_meta"
 
-            options = get_mock_filter_options(meta_table)
+            options = get_filter_options(meta_table, vdb)
         except Exception as error:
             logger.warning(
                 "Failed to load filter options for %s: %s", dataset_id, error
@@ -286,12 +291,11 @@ def app_server(
 
     def _handle_refresh_intersection() -> None:
         selected = _selected_datasets()
-        selected_ids = [str(entry["id"]) for entry in selected]
         selected_db_names = [
             str(entry.get("db_name") or entry.get("dbName")) for entry in selected
         ]
 
-        if not selected_ids:
+        if not selected_db_names:
             intersection_cells.set([])
             intersection_error.set(None)
             has_loaded_intersection.set(False)
@@ -301,14 +305,14 @@ def app_server(
         intersection_error.set(None)
 
         try:
-            sync_mock_active_set_config(selected_ids)
+            vdb = get_or_create_vdb(selected_db_names)
 
             row_counts: dict[str, int | None] = {}
             for entry in selected:
                 dataset_id = str(entry["id"])
                 db_name = str(entry.get("db_name") or entry.get("dbName"))
                 try:
-                    row_counts[dataset_id] = int(get_mock_row_count(db_name))
+                    row_counts[dataset_id] = int(get_row_count(db_name, vdb))
                 except Exception:
                     row_counts[dataset_id] = None
 
@@ -328,8 +332,9 @@ def app_server(
                 updated_datasets.append(next_entry)
 
             payloads = _selected_filter_payloads()
-            cells = get_mock_intersection_cells(
+            cells = get_intersection_cells(
                 selected_db_names,
+                vdb,
                 filters=payloads["categorical"],
                 numeric_filters=payloads["numeric"],
             )
@@ -354,7 +359,6 @@ def app_server(
                 next_entry["tfCount"] = tf_count
                 next_entry["tf_count_known"] = True
                 next_entry["tfCountKnown"] = True
-                # Keep legacy alias in sync for old summary uses.
                 next_entry["gene_count"] = tf_count
                 final_datasets.append(next_entry)
 
@@ -370,10 +374,6 @@ def app_server(
 
     def _handle_matrix_cell_click(payload: dict[str, Any]) -> None:
         intersection_detail.set(payload)
-
-    @reactive.calc
-    def _combined_selection_error() -> str | None:
-        return datasets_error() or intersection_error()
 
     @render.ui
     def sidebar_region() -> ui.Tag:
@@ -616,7 +616,7 @@ def app_server(
         intersection_cells=intersection_cells,
         has_loaded_intersection=has_loaded_intersection,
         intersection_loading=intersection_loading,
-        intersection_error=_combined_selection_error,
+        intersection_error=intersection_error,
         on_cell_click=_handle_matrix_cell_click,
     )
 
