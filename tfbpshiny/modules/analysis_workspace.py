@@ -274,7 +274,7 @@ def _render_composite(
         return ui.div(
             {"class": "empty-state"},
             ui.h3("No data available"),
-            ui.p("No overlapping TFs found between the selected datasets."),
+            ui.p("No data available for the selected datasets."),
         )
 
     # Apply filter: identify TFs that pass in at least one perturbation.
