@@ -112,6 +112,9 @@ repositories:
   BrentLab/yeast_comparative_analysis:
     dataset:
       dto:
+        db_name: dto
+        sample_id:
+          field: sample_id
         dto_pvalue:
           field: dto_empirical_pvalue
         dto_fdr:

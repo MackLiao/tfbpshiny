@@ -147,8 +147,8 @@ def app_server(
             "page": 1,
             "page_size": 25,
             "composite_method": "dto",
-            "composite_filter_threshold": 0.01,
-            "composite_filter_operator": "<",
+            "composite_filter_threshold": 1.0,
+            "composite_filter_operator": "<=",
             "composite_binding_datasets": [],
             "composite_perturbation_datasets": [],
         }

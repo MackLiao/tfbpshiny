@@ -8,6 +8,7 @@ from typing import Any
 import pandas as pd
 from shiny import module, reactive, render, ui
 
+from tfbpshiny.data_service import get_dto_data, get_or_create_vdb
 from tfbpshiny.mock_data import (
     get_mock_composite_data,
     get_mock_correlation,
@@ -219,8 +220,8 @@ def _render_composite(
         )
 
     method = str(config.get("composite_method", "dto"))
-    threshold = float(config.get("composite_filter_threshold", 0.5))
-    operator_str = str(config.get("composite_filter_operator", "<"))
+    threshold = float(config.get("composite_filter_threshold", 1.0))
+    operator_str = str(config.get("composite_filter_operator", "<="))
     compare_fn = _OPERATOR_MAP.get(operator_str, op.lt)
     method_label = _COMPOSITE_METHOD_LABELS.get(method, method)
 
@@ -232,15 +233,49 @@ def _render_composite(
         db_name = str(d.get("db_name", ""))
         name_map[db_name] = source_name_map.get(source_key, db_name)
 
-    raw = get_mock_composite_data(bd_names, pr_names, name_map=name_map)
-    if not raw:
+    # For DTO method, use real data from VirtualDB
+    df = pd.DataFrame()  # Initialize to ensure df is always defined
+    if method == "dto":
+        try:
+            # Create VirtualDB with selected datasets + DTO
+            all_db_names = bd_names + pr_names + ["dto"]
+            vdb = get_or_create_vdb(all_db_names)
+
+            # Query DTO data
+            raw = get_dto_data(bd_names, pr_names, vdb)
+
+            if raw:
+                df = pd.DataFrame(raw)
+                # Map column names to match what create_distribution_plot expects
+                df = df.rename(
+                    columns={
+                        "binding_id": "binding_source",
+                        "perturbation_id": "expression_source",
+                    }
+                )
+                # Use dto_pvalue as the "dto" column
+                if "dto_pvalue" in df.columns:
+                    df["dto"] = df["dto_pvalue"]
+        except Exception as e:
+            # Fall back to mock data on error
+            import logging
+
+            logging.getLogger("shiny").warning(
+                f"Failed to get DTO data, falling back to mock: {e}"
+            )
+            raw = get_mock_composite_data(bd_names, pr_names, name_map=name_map)
+            df = pd.DataFrame(raw) if raw else pd.DataFrame()
+    else:
+        # Use mock data for other methods
+        raw = get_mock_composite_data(bd_names, pr_names, name_map=name_map)
+        df = pd.DataFrame(raw) if raw else pd.DataFrame()
+
+    if df.empty:
         return ui.div(
             {"class": "empty-state"},
             ui.h3("No data available"),
             ui.p("No overlapping TFs found between the selected datasets."),
         )
-
-    df = pd.DataFrame(raw)
 
     # Apply filter: identify TFs that pass in at least one perturbation.
     df["passes"] = df[method].apply(lambda v: compare_fn(v, threshold))

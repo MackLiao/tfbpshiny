@@ -6,6 +6,7 @@ from typing import Any
 
 from shiny import module, reactive, render, ui
 
+from tfbpshiny.data_service import get_dto_config
 from tfbpshiny.utils.source_name_lookup import get_source_name_dict
 
 _MODULE_LABELS: dict[str, str] = {
@@ -177,7 +178,7 @@ def _composite_sidebar_static() -> ui.Tag:
                             ">": ">",
                             ">=": ">=",
                         },
-                        selected="<",
+                        selected="<=",
                         width="80px",
                     ),
                 ),
@@ -186,7 +187,7 @@ def _composite_sidebar_static() -> ui.Tag:
                     ui.input_numeric(
                         "composite_filter_threshold",
                         "Threshold",
-                        value=0.5,
+                        value=1.0,
                         min=0,
                         max=1.0,
                         step=0.001,
@@ -247,10 +248,18 @@ def analysis_sidebar_server(
     def composite_binding_choices() -> ui.Tag:
         selected = [d for d in datasets() if d.get("selected")]
         binding = [d for d in selected if d.get("type") == "Binding"]
+
+        # Filter by DTO links
+        dto_config = get_dto_config()
+        dto_binding_dbs = set(dto_config.get("binding", []))
+
+        if dto_binding_dbs:
+            binding = [d for d in binding if str(d["db_name"]) in dto_binding_dbs]
+
         if not binding:
             return ui.p(
                 {"style": "font-size:12px; color:var(--color-text-muted);"},
-                "No binding datasets in active set.",
+                "No binding datasets linked to DTO in active set.",
             )
         # Get source name mapping for binding sources
         source_name_map = get_source_name_dict(datatype="binding")
@@ -272,10 +281,20 @@ def analysis_sidebar_server(
     def composite_perturbation_choices() -> ui.Tag:
         selected = [d for d in datasets() if d.get("selected")]
         perturbation = [d for d in selected if d.get("type") == "Perturbation"]
+
+        # Filter by DTO links
+        dto_config = get_dto_config()
+        dto_perturbation_dbs = set(dto_config.get("perturbation", []))
+
+        if dto_perturbation_dbs:
+            perturbation = [
+                d for d in perturbation if str(d["db_name"]) in dto_perturbation_dbs
+            ]
+
         if not perturbation:
             return ui.p(
                 {"style": "font-size:12px; color:var(--color-text-muted);"},
-                "No perturbation datasets in active set.",
+                "No perturbation datasets linked to DTO in active set.",
             )
         # Get source name mapping for perturbation sources
         source_name_map = get_source_name_dict(datatype="perturbation_response")

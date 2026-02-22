@@ -514,3 +514,154 @@ def get_intersection_cells(
             cells.append({"row": row_db, "col": col_db, "count": count})
 
     return cells
+
+
+# ---------------------------------------------------------------------------
+# 6. DTO (Dual Threshold Optimization) composite analysis
+# ---------------------------------------------------------------------------
+
+
+def get_dto_config(yaml_path: Path | str | None = None) -> dict[str, list[str]]:
+    """
+    Parse DTO links from the YAML config.
+
+    Returns a dict with:
+    - "binding": list of db_names linked as binding sources
+    - "perturbation": list of db_names linked as perturbation sources
+
+    """
+    path = Path(yaml_path) if yaml_path else _YAML_PATH
+    config = MetadataConfig.from_yaml(path)
+
+    binding_dbs: list[str] = []
+    perturbation_dbs: list[str] = []
+
+    for repo_id, repo_cfg in config.repositories.items():
+        if not repo_cfg.dataset:
+            continue
+        for config_name, ds_cfg in repo_cfg.dataset.items():
+            if not getattr(ds_cfg, "links", None):
+                continue
+
+            # This is a comparative dataset (e.g., DTO)
+            links = ds_cfg.links
+            if hasattr(links, "binding_id"):
+                for pair in links.binding_id:
+                    _, cfg_name = pair[0], pair[1]
+                    db_name = cfg_name  # Use config_name as db_name
+                    if db_name not in binding_dbs:
+                        binding_dbs.append(db_name)
+
+            if hasattr(links, "perturbation_id"):
+                for pair in links.perturbation_id:
+                    _, cfg_name = pair[0], pair[1]
+                    db_name = cfg_name
+                    if db_name not in perturbation_dbs:
+                        perturbation_dbs.append(db_name)
+
+    return {
+        "binding": binding_dbs,
+        "perturbation": perturbation_dbs,
+    }
+
+
+def get_dto_data(
+    binding_dbs: list[str],
+    perturbation_dbs: list[str],
+    vdb: VirtualDB,
+) -> list[dict[str, Any]]:
+    """
+    Query DTO data for the selected binding and perturbation datasets.
+
+    DTO is dataset-pair level data - each row represents a
+    (binding_sample, perturbation_sample) pair with DTO metrics.
+    There's no per-TF data.
+
+    Args:
+        binding_dbs: List of binding dataset db_names to filter
+        perturbation_dbs: List of perturbation dataset db_names to filter
+        vdb: VirtualDB instance with DTO dataset loaded
+
+    Returns:
+        List of dicts with binding_id, perturbation_id, dto_pvalue, and dto_fdr
+
+    """
+    # Check if dto_expanded view exists
+    try:
+        fields = set(vdb.get_fields("dto_expanded"))
+    except Exception:
+        logger.warning("DTO expanded view not found in VirtualDB")
+        return []
+
+    # Build WHERE clause for filtering using the partition columns
+    # The expanded view has binding_id_source and perturbation_id_source
+    conditions: list[str] = []
+    params: dict[str, Any] = {}
+
+    if binding_dbs:
+        binding_placeholders = []
+        for i, db in enumerate(binding_dbs):
+            param_name = f"p{i}"
+            params[param_name] = db
+            binding_placeholders.append(f"${param_name}")
+        conditions.append(f"binding_id_source IN ({', '.join(binding_placeholders)})")
+
+    if perturbation_dbs:
+        start_idx = len(params)
+        pert_placeholders = []
+        for i, db in enumerate(perturbation_dbs):
+            param_name = f"p{start_idx + i}"
+            params[param_name] = db
+            pert_placeholders.append(f"${param_name}")
+        conditions.append(f"perturbation_id_source IN ({', '.join(pert_placeholders)})")
+
+    where_clause = " AND ".join(conditions) if conditions else "1=1"
+
+    # DTO doesn't have a regulator column - it's dataset-pair level data
+    # Build select columns for the DTO metrics
+    select_cols = ["binding_id_source", "perturbation_id_source"]
+
+    # Check for dto_pvalue (mapped from dto_empirical_pvalue)
+    if "dto_empirical_pvalue" in fields:
+        select_cols.append("dto_empirical_pvalue")
+    elif "dto_pvalue" in fields:
+        select_cols.append("dto_pvalue")
+    # Check for dto_fdr
+    if "dto_fdr" in fields:
+        select_cols.append("dto_fdr")
+
+    col_sql = ", ".join(select_cols)
+
+    sql = f"""
+        SELECT {col_sql}
+        FROM dto_expanded
+        WHERE {where_clause}
+    """
+
+    try:
+        df = vdb.query(sql, **params)
+    except Exception:
+        logger.warning("Failed to query DTO data", exc_info=True)
+        return []
+
+    # Build result list - DTO is dataset-pair level, not per-TF
+    # We use binding_id_source as "regulator_symbol" for compatibility with the plot
+    results: list[dict[str, Any]] = []
+    for _, row in df.iterrows():
+        # Map dto_empirical_pvalue to dto_pvalue in output
+        dto_pvalue = _to_float_or_none(row.get("dto_empirical_pvalue"))
+        if dto_pvalue is None:
+            dto_pvalue = _to_float_or_none(row.get("dto_pvalue"))
+
+        # Use binding/perturbation source as the "regulator" for visualization
+        results.append(
+            {
+                "regulator_symbol": str(row.get("binding_id_source", "")),
+                "binding_id": str(row.get("binding_id_source", "")),
+                "perturbation_id": str(row.get("perturbation_id_source", "")),
+                "dto_pvalue": dto_pvalue,
+                "dto_fdr": _to_float_or_none(row.get("dto_fdr")),
+            }
+        )
+
+    return results
