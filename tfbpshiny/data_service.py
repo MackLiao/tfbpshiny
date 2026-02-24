@@ -43,11 +43,11 @@ def _validate_identifier(name: str) -> str:
 # ---------------------------------------------------------------------------
 
 _BINDING_KEYWORDS = re.compile(
-    r"callingcards|harbison|rossi|mahendrawada|chec|chipexo|chip",
+    r"callingcards|harbison|rossi|m2025|chec|chipexo|chip",
     re.IGNORECASE,
 )
 _PERTURBATION_KEYWORDS = re.compile(
-    r"hughes|kemmeren|hackett|overexpression|knockout|perturbation|tfko|zev|degron",
+    r"hughes|kemmeren|hackett|overexpression|knockout|perturbation|tfko|zev|rnaseq",
     re.IGNORECASE,
 )
 
@@ -374,7 +374,9 @@ def get_sample_count(db_name: str, vdb: VirtualDB) -> int:
 
     """
     safe_table = _validate_identifier(f"{db_name}_meta")
-    result = vdb.query(f"SELECT COUNT(DISTINCT sample_id) AS cnt FROM {safe_table}")
+    # Use the resolved sample_id column name from VirtualDB config
+    sample_col = vdb._get_sample_id_col(db_name)
+    result = vdb.query(f"SELECT COUNT(DISTINCT {sample_col}) AS cnt FROM {safe_table}")
     return int(result["cnt"].iloc[0]) if len(result) else 0
 
 

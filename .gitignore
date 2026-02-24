@@ -187,3 +187,4 @@ logs
 
 CLAUDE.md
 .claude/
+.tmp/

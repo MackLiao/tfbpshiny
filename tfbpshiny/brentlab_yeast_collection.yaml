@@ -1,10 +1,30 @@
 repositories:
-  # NOTE: BrentLab/callingcards excluded — 3 tfbpapi bugs:
-  #   1. annotated_features: _register_meta_view uses literal "sample_id"
-  #      instead of mapped field "id" (sample_id: field: id).
-  #   2. annotated_features_combined: partitioned parquet discovery fails
-  #      ("Config not found") despite config existing on HF.
-  #   3. annotated_features_orig_reprocess: same partitioned discovery issue.
+  BrentLab/callingcards:
+    regulator_locus_tag:
+      field: regulator_locus_tag
+    regulator_symbol:
+      field: regulator_symbol
+    carbon_source:
+      path: experimental_conditions.media.carbon_source.compound
+    temperature_celsius:
+      path: experimental_conditions.temperature_celsius
+    dataset:
+      # binding
+      annotated_features:
+        db_name: cc_replicate_db
+        sample_id:
+          field: id
+      annotated_features_combined:
+        db_name: cc_combined_db
+        sample_id:
+          field: genome_map_id_set
+      annotated_features_orig_reprocess:
+        db_name: cc_replicate_repro
+        sample_id:
+          field: id
+        carbon_source:
+          field: condition
+          path: media.carbon_source.compound
 
   BrentLab/harbison_2004:
     dataset:
@@ -41,11 +61,28 @@ repositories:
         target_locus_tag:
           field: target_locus_tag
 
-  # NOTE: BrentLab/mahendrawada_2025 (chec_mahendrawada) excluded — tfbpapi bug:
-  #   _register_meta_view tries to SELECT regulator_locus_tag/regulator_symbol
-  #   from the primary parquet, but these columns only exist in the separate
-  #   metadata table (chec_mahendrawada_m2025_af_combined_meta). tfbpapi needs
-  #   to JOIN the _meta parquet to resolve property mappings.
+  BrentLab/mahendrawada_2025:
+    temperature_celsius:
+      path: experimental_conditions.temperature_celsius
+    dataset:
+      # binding
+      chec_mahendrawada_m2025_af_combined:
+        db_name: chec_m2025
+        sample_id:
+          field: sample_id
+        regulator_locus_tag:
+          field: regulator_locus_tag
+        regulator_symbol:
+          field: regulator_symbol
+      # perturbation
+      rnaseq_reprocessed:
+        db_name: degron
+        sample_id:
+          field: sample_id
+        regulator_locus_tag:
+          field: regulator_locus_tag
+        regulator_symbol:
+          field: regulator_symbol
 
   BrentLab/hughes_2006:
     dataset:
@@ -122,6 +159,9 @@ repositories:
         links:
           binding_id:
             - [BrentLab/harbison_2004, harbison_2004]
+            - [BrentLab/callingcards, annotated_features]
+            - [BrentLab/callingcards, annotated_features_combined]
+            - [BrentLab/callingcards, annotated_features_orig_reprocess]
             - [BrentLab/rossi_2021, rossi_2021_af_combined]
             - [BrentLab/mahendrawada_2025, chec_mahendrawada_m2025_af_combined]
           perturbation_id:
@@ -129,6 +169,7 @@ repositories:
             - [BrentLab/hackett_2020, hackett_2020]
             - [BrentLab/hughes_2006, overexpression]
             - [BrentLab/hughes_2006, knockout]
+            - [BrentLab/mahendrawada_2025, rnaseq_reprocessed]
 
 factor_aliases:
   carbon_source:
