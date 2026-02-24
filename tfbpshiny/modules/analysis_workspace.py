@@ -35,7 +35,7 @@ _OPERATOR_MAP: dict[str, Any] = {
 _MODULE_LABELS: dict[str, str] = {
     "binding": "Binding",
     "perturbation": "Perturbation",
-    "composite": "Composite",
+    "composite": "Comparison",
 }
 
 
@@ -118,7 +118,7 @@ def analysis_workspace_server(
             config = analysis_config()
             method = str(config.get("composite_method", "dto"))
             method_label = _COMPOSITE_METHOD_LABELS.get(method, method)
-            return ui.h1(f"Composite - {method_label}")
+            return ui.h1(f"Comparison - {method_label}")
 
         module_label = _MODULE_LABELS.get(module_name, "Analysis")
         view = str(analysis_config().get("view", "table")).capitalize()

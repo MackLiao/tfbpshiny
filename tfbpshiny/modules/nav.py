@@ -8,10 +8,10 @@ from typing import Any
 from shiny import module, reactive, render, ui
 
 _MODULE_ITEMS: list[dict[str, str]] = [
-    {"id": "selection", "label": "Selection", "tag": "Active Set"},
+    {"id": "selection", "label": "Selection", "tag": "Select Datasets"},
     {"id": "binding", "label": "Binding", "tag": "Binding"},
     {"id": "perturbation", "label": "Perturbation", "tag": "Perturb"},
-    {"id": "composite", "label": "Composite", "tag": "Composite"},
+    {"id": "composite", "label": "Comparison", "tag": "Comparison"},
 ]
 
 

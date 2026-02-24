@@ -105,6 +105,11 @@ def get_datasets(yaml_path: Path | str | None = None) -> list[dict[str, Any]]:
             continue
         for config_name, ds_cfg in repo_cfg.dataset.items():
             db_name = ds_cfg.db_name or config_name
+            display_name = (
+                getattr(ds_cfg, "display_name", None)
+                or ds_cfg.model_extra.get("display_name")
+                or _title_case(db_name)
+            )
             dataset_type = _infer_dataset_type(repo_id, config_name, ds_cfg)
 
             # Comparative datasets (e.g. DTO) are for composite analysis,
@@ -137,7 +142,7 @@ def get_datasets(yaml_path: Path | str | None = None) -> list[dict[str, Any]]:
                     "repoId": repo_id,
                     "config_name": config_name,
                     "configName": config_name,
-                    "name": _title_case(db_name),
+                    "name": display_name,
                     "type": dataset_type,
                     "group": group,
                     "type_badge": type_badge,

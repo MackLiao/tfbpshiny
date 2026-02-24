@@ -78,16 +78,6 @@ def selection_sidebar_server(
         collapsed.set(not collapsed())
 
     @reactive.effect
-    def _sync_logic_mode() -> None:
-        try:
-            mode = input.logic_mode()
-        except Exception:
-            return
-
-        if mode in {"intersect", "union"} and logic_mode() != mode:
-            logic_mode.set(mode)
-
-    @reactive.effect
     def _sync_dataset_toggles() -> None:
         current = datasets()
         changed = False
@@ -123,12 +113,6 @@ def selection_sidebar_server(
                 if on_configure:
                     on_configure(str(dataset["id"]))
                 break
-
-    @reactive.effect
-    @reactive.event(input.clear_all_filters)
-    def _clear_all_filters() -> None:
-        if on_clear_all_filters:
-            on_clear_all_filters()
 
     @reactive.effect
     @reactive.event(input.refresh)
@@ -226,10 +210,14 @@ def selection_sidebar_server(
                     if active_filters > 0 and not is_collapsed
                     else ui.span()
                 ),
-                ui.input_action_button(
-                    configure_id,
-                    fa.icon_svg("sliders", width="12px", height="12px"),
-                    class_="btn-configure",
+                (
+                    ui.input_action_button(
+                        configure_id,
+                        "Filter",
+                        class_="btn-configure",
+                    )
+                    if not is_collapsed
+                    else ui.span()
                 ),
             )
 
@@ -237,11 +225,24 @@ def selection_sidebar_server(
         if binding:
             if not is_collapsed:
                 section_tags.append(ui.div({"class": "group-header"}, "Binding"))
+                section_tags.append(
+                    ui.div(
+                        {"class": "group-description"},
+                        "Datasets measuring TF-DNA interactions",
+                    )
+                )
             section_tags.extend(_dataset_row(dataset) for dataset in binding)
         if perturbation_or_other:
             if not is_collapsed:
                 section_tags.append(
                     ui.div({"class": "group-header"}, "Perturbation / Other")
+                )
+                section_tags.append(
+                    ui.div(
+                        {"class": "group-description"},
+                        "Datasets measuring gene expression changes"
+                        " after TF perturbation",
+                    )
                 )
             section_tags.extend(
                 _dataset_row(dataset) for dataset in perturbation_or_other
@@ -254,12 +255,6 @@ def selection_sidebar_server(
                     ui.p("No datasets match your search."),
                 )
             )
-
-        logic_help = (
-            "AND mode prioritizes shared signal across datasets."
-            if logic_mode() == "intersect"
-            else "OR mode prioritizes broader discovery across datasets."
-        )
 
         refresh_loading = bool(datasets_loading() or intersection_loading())
         refresh_label = "Refreshing..." if refresh_loading else "Refresh Matrix"
@@ -276,11 +271,11 @@ def selection_sidebar_server(
                     {"class": "sidebar-header-row"},
                     (
                         ui.div(
-                            ui.h2("Active Set Builder"),
+                            ui.h2("Select Datasets"),
                             ui.div({"class": "subtitle"}, "Select datasets to compare"),
                         )
                         if not is_collapsed
-                        else ui.div(ui.h2("AS"))
+                        else ui.div(ui.h2("SD"))
                     ),
                     ui.input_action_button(
                         "toggle_sidebar",
@@ -308,73 +303,9 @@ def selection_sidebar_server(
             ui.div(
                 {"class": "sidebar-body"},
                 ui.div({"class": "dataset-list"}, *section_tags),
-                (
-                    ui.div(
-                        {"class": "logic-sieve"},
-                        ui.div(
-                            {"class": "logic-sieve-header"},
-                            ui.span({"class": "group-header"}, "Selection Logic"),
-                            ui.input_radio_buttons(
-                                "logic_mode",
-                                label=None,
-                                choices={"intersect": "AND", "union": "OR"},
-                                selected=logic_mode(),
-                                inline=True,
-                            ),
-                        ),
-                        ui.div(
-                            {
-                                "class": "logic-explanation"
-                                + (
-                                    " logic-explanation-and"
-                                    if logic_mode() == "intersect"
-                                    else " logic-explanation-or"
-                                ),
-                            },
-                            logic_help,
-                        ),
-                        ui.div(
-                            {"class": "logic-footer"},
-                            ui.span(
-                                {"class": "logic-filter-count"},
-                                f"Active Filters: {summary['active_filters']}",
-                            ),
-                            ui.input_action_button(
-                                "clear_all_filters",
-                                "Clear All",
-                                class_="btn btn-sm btn-outline-secondary",
-                            ),
-                        ),
-                    )
-                    if not is_collapsed
-                    else ui.span()
-                ),
             ),
             ui.div(
                 {"class": "sidebar-footer"},
-                (
-                    ui.div(
-                        {"class": "sidebar-summary-cards"},
-                        ui.div(
-                            {"class": "summary-card"},
-                            ui.span({"class": "summary-label"}, "TFs"),
-                            ui.span(
-                                {"class": "summary-value"},
-                                f"{summary['selected_tfs']:,}",
-                            ),
-                        ),
-                        ui.div(
-                            {"class": "summary-card"},
-                            ui.span({"class": "summary-label"}, "Filters"),
-                            ui.span(
-                                {"class": "summary-value"},
-                                str(summary["active_filters"]),
-                            ),
-                        ),
-                    )
-                    if not is_collapsed
-                    else ui.span()
-                ),
                 ui.input_action_button(
                     "refresh",
                     ui.span(
