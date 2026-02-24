@@ -191,7 +191,7 @@ def rank_response_replicate_plot_server(
         @output(id=plot_id)
         @render_plotly
         def _():
-            return plot_formatter(fig)
+            return plot_formatter(fig, "Regulator", "Response")
 
     # Render dynamic UI
     @output

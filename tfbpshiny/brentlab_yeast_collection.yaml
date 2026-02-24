@@ -12,14 +12,17 @@ repositories:
       # binding
       annotated_features:
         db_name: cc_replicate_db
+        display_name: "2026 Calling Cards (replicate)"
         sample_id:
           field: id
       annotated_features_combined:
         db_name: cc_combined_db
+        display_name: "2026 Calling Cards (combined)"
         sample_id:
           field: genome_map_id_set
       annotated_features_orig_reprocess:
         db_name: cc_replicate_repro
+        display_name: "2026 Calling Cards (reprocessed)"
         sample_id:
           field: id
         carbon_source:
@@ -31,6 +34,7 @@ repositories:
       # binding
       harbison_2004:
         db_name: harbison
+        display_name: "2004 ChIP-chip (harbison)"
         sample_id:
           field: sample_id
         carbon_source:
@@ -53,6 +57,8 @@ repositories:
       path: experimental_conditions.temperature_celsius
     dataset:
       rossi_2021_af_combined:
+        db_name: rossi
+        display_name: "2021 ChIP-exo (rossi)"
         sample_id:
           field: sample_id
         regulator_locus_tag:
@@ -66,33 +72,31 @@ repositories:
     dataset:
       # binding
       chec_mahendrawada_m2025_af_combined:
+        db_name: chec_m2025
+        display_name: "2025 CHEC-seq (mahendrawada)"
         sample_id:
           field: sample_id
         regulator_locus_tag:
           field: regulator_locus_tag
         regulator_symbol:
           field: regulator_symbol
-
-  BrentLab/hu_2007_reimand_2010:
-      # binding
-      hu_2007_reimand_2010:
+      # perturbation
+      rnaseq_reprocessed:
+        db_name: degron
+        display_name: "2025 Degron RNA-seq (mahendrawada)"
         sample_id:
           field: sample_id
-        carbon_source:
-          path: experimental_conditions.media.carbon_source.compoun
-        temperature_celsius:
-          path: experimental_conditions.temperature_celsius
-          dtype: numeric
         regulator_locus_tag:
           field: regulator_locus_tag
         regulator_symbol:
           field: regulator_symbol
-
 
   BrentLab/hughes_2006:
     dataset:
       # perturbation
       overexpression:
+        db_name: hughes_overexpression
+        display_name: "2006 Overexpression (hughes)"
         sample_id:
           field: sample_id
         carbon_source:
@@ -105,6 +109,8 @@ repositories:
           field: regulator_symbol
       # perturbation
       knockout:
+        db_name: hughes_knockout
+        display_name: "2006 Knockout (hughes)"
         sample_id:
           field: sample_id
         carbon_source:
@@ -121,6 +127,7 @@ repositories:
       # perturbation
       kemmeren_2014:
         db_name: kemmeren
+        display_name: "2014 TFKO (kemmeren)"
         sample_id:
           field: sample_id
         carbon_source:
@@ -137,6 +144,7 @@ repositories:
       # perturbation
       hackett_2020:
         db_name: hackett
+        display_name: "2020 TFKO (hackett)"
         sample_id:
           field: sample_id
         carbon_source:
@@ -152,6 +160,9 @@ repositories:
   BrentLab/yeast_comparative_analysis:
     dataset:
       dto:
+        db_name: dto
+        sample_id:
+          field: sample_id
         dto_pvalue:
           field: dto_empirical_pvalue
         dto_fdr:
@@ -159,6 +170,9 @@ repositories:
         links:
           binding_id:
             - [BrentLab/harbison_2004, harbison_2004]
+            - [BrentLab/callingcards, annotated_features]
+            - [BrentLab/callingcards, annotated_features_combined]
+            - [BrentLab/callingcards, annotated_features_orig_reprocess]
             - [BrentLab/rossi_2021, rossi_2021_af_combined]
             - [BrentLab/mahendrawada_2025, chec_mahendrawada_m2025_af_combined]
           perturbation_id:
@@ -166,6 +180,7 @@ repositories:
             - [BrentLab/hackett_2020, hackett_2020]
             - [BrentLab/hughes_2006, overexpression]
             - [BrentLab/hughes_2006, knockout]
+            - [BrentLab/mahendrawada_2025, rnaseq_reprocessed]
 
 factor_aliases:
   carbon_source:
