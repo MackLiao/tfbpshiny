@@ -330,6 +330,48 @@ def _render_composite(
         color_label = "Binding Data Source"
         facet_label = "Perturbation Source"
 
+    # Keep only regulators present in all color-axis sources per facet.
+    # Skip for DTO data: rows represent dataset pairs, not per-TF data,
+    # so regulator_symbol == binding_source and intersection is meaningless.
+    if method != "dto":
+        # Count all color-axis sources per facet (including those with no
+        # passing rows) so the denominator isn't weakened by strict thresholds.
+        sources_per_facet = filtered.groupby("expression_source")[
+            "binding_source"
+        ].nunique()
+
+        if (sources_per_facet > 1).any():
+            # For each (facet, regulator), count distinct color sources
+            # that have at least one non-NA (passing) value.
+            non_na = filtered.dropna(subset=[method])
+            coverage = non_na.groupby(["expression_source", "regulator_symbol"])[
+                "binding_source"
+            ].nunique()
+            # Keep regulators covering all sources *within their own facet*.
+            shared = coverage.reset_index(name="n_sources")
+            shared = shared.merge(
+                sources_per_facet.rename("n_facet_sources"),
+                on="expression_source",
+            )
+            shared = shared.loc[
+                shared["n_sources"] == shared["n_facet_sources"],
+                ["expression_source", "regulator_symbol"],
+            ]
+            filtered = filtered.merge(
+                shared, on=["expression_source", "regulator_symbol"]
+            )
+
+    if filtered.empty:
+        return ui.div(
+            {"class": "empty-state"},
+            ui.h3("No shared regulators"),
+            ui.p(
+                "No regulators are common to all "
+                f"{color_label.lower().rstrip('s')} sources "
+                "in any facet. Try selecting fewer sources."
+            ),
+        )
+
     try:
         fig = create_distribution_plot(
             filtered,
