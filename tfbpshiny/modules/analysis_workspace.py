@@ -18,6 +18,7 @@ from tfbpshiny.mock_data import (
 )
 from tfbpshiny.utils.create_distribution_plot import create_distribution_plot
 from tfbpshiny.utils.source_name_lookup import get_source_name_dict
+from tfbpshiny.utils.transforms import neglog10_with_pseudocount
 
 _COMPOSITE_METHOD_LABELS: dict[str, str] = {
     "dto": "DTO",
@@ -220,9 +221,9 @@ def _render_composite(
         )
 
     method = str(config.get("composite_method", "dto"))
-    threshold = float(config.get("composite_filter_threshold", 1.0))
-    operator_str = str(config.get("composite_filter_operator", "<="))
-    compare_fn = _OPERATOR_MAP.get(operator_str, op.lt)
+    threshold = float(config.get("composite_filter_threshold", 1.3))
+    operator_str = str(config.get("composite_filter_operator", ">="))
+    compare_fn = _OPERATOR_MAP.get(operator_str, op.ge)
     method_label = _COMPOSITE_METHOD_LABELS.get(method, method)
 
     # Build source name mapping for display
@@ -277,6 +278,22 @@ def _render_composite(
             ui.p("No data available for the selected datasets."),
         )
 
+    # Transform DTO p-values to -log10 scale.
+    if method == "dto":
+        try:
+            df[method] = neglog10_with_pseudocount(df[method])
+            method_label = "-log10(DTO p-value)"
+        except ValueError:
+            return ui.div(
+                {"class": "empty-state"},
+                ui.h3("Cannot transform p-values"),
+                ui.p(
+                    "All DTO p-values are zero. "
+                    "Check the underlying data for this combination "
+                    "of binding and perturbation sources."
+                ),
+            )
+
     # Apply filter: identify TFs that pass in at least one perturbation.
     df["passes"] = df[method].apply(lambda v: compare_fn(v, threshold))
 
@@ -320,6 +337,7 @@ def _render_composite(
             y_axis_title=method_label,
             color_label=color_label,
             facet_label=facet_label,
+            match_yaxes=True,
         )
         plot_html = fig.to_html(full_html=False, include_plotlyjs="cdn")
     except Exception as e:

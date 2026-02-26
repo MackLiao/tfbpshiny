@@ -252,7 +252,7 @@ def _composite_sidebar_static() -> ui.Tag:
                             ">": ">",
                             ">=": ">=",
                         },
-                        selected="<=",
+                        selected=">=",
                         width="80px",
                     ),
                 ),
@@ -261,10 +261,10 @@ def _composite_sidebar_static() -> ui.Tag:
                     ui.input_numeric(
                         "composite_filter_threshold",
                         "Threshold",
-                        value=1.0,
+                        value=1.3,
                         min=0,
-                        max=1.0,
-                        step=0.001,
+                        max=10.0,
+                        step=0.1,
                     ),
                 ),
             ),
@@ -477,11 +477,11 @@ def analysis_sidebar_server(
         )
         ui.update_select(
             "composite_filter_operator",
-            selected=str(config.get("composite_filter_operator", "<=")),
+            selected=str(config.get("composite_filter_operator", ">=")),
         )
         ui.update_numeric(
             "composite_filter_threshold",
-            value=float(config.get("composite_filter_threshold", 1.0)),
+            value=float(config.get("composite_filter_threshold", 1.3)),
         )
 
     @reactive.effect

@@ -12,6 +12,7 @@ def plot_formatter(
     *,
     height: int = 500,
     legend_title: str = "Binding Source",
+    match_yaxes: bool = False,
 ) -> Figure:
     """
     Apply consistent styling to a faceted box-plot figure.
@@ -33,5 +34,8 @@ def plot_formatter(
 
     fig.update_xaxes(title_text=x_axis_title)
     fig.update_yaxes(title_text=y_axis_title, col=1)
+
+    if match_yaxes:
+        fig.update_yaxes(matches="y")
 
     return fig

@@ -21,6 +21,7 @@ def create_distribution_plot(
     height: int = 500,
     color_label: str = "Binding Data Source",
     facet_label: str = "Perturbation Source",
+    match_yaxes: bool = False,
 ) -> Figure:
     """
     Create a faceted box-plot of *y_column* by binding x perturbation source.
@@ -72,5 +73,10 @@ def create_distribution_plot(
     )
 
     return plot_formatter(
-        fig, color_label, y_axis_title, height=height, legend_title=color_label
+        fig,
+        color_label,
+        y_axis_title,
+        height=height,
+        legend_title=color_label,
+        match_yaxes=match_yaxes,
     )
