@@ -295,6 +295,42 @@ body {
     background: var(--color-primary-light);
 }
 
+.dto-radio-row {
+    position: relative;
+}
+
+.dto-links {
+    position: absolute;
+    top: 0;
+    right: 0;
+    display: flex;
+    gap: 4px;
+}
+
+.dto-links .btn-configure {
+    height: 22px;
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-sm);
+    background: transparent;
+    color: var(--color-text-muted);
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: color var(--transition-fast), background var(--transition-fast);
+    padding: 0 6px;
+    font-size: 10px;
+    font-weight: 600;
+    white-space: nowrap;
+    text-decoration: none;
+}
+
+.dto-links .btn-configure:hover {
+    color: var(--color-primary);
+    background: var(--color-primary-light);
+    text-decoration: none;
+}
+
 /* --- Group headers ------------------------------------------------------ */
 .group-header {
     font-size: 11px;

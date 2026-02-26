@@ -298,9 +298,28 @@ def _render_composite(
             ),
         )
 
+    plot_layout = str(config.get("composite_plot_layout", "binding_color"))
+    if plot_layout == "perturbation_color":
+        filtered = filtered.rename(
+            columns={
+                "binding_source": "_tmp_binding",
+                "expression_source": "binding_source",
+            }
+        )
+        filtered = filtered.rename(columns={"_tmp_binding": "expression_source"})
+        color_label = "Perturbation Source"
+        facet_label = "Binding Source"
+    else:
+        color_label = "Binding Data Source"
+        facet_label = "Perturbation Source"
+
     try:
         fig = create_distribution_plot(
-            filtered, y_column=method, y_axis_title=method_label
+            filtered,
+            y_column=method,
+            y_axis_title=method_label,
+            color_label=color_label,
+            facet_label=facet_label,
         )
         plot_html = fig.to_html(full_html=False, include_plotlyjs="cdn")
     except Exception as e:

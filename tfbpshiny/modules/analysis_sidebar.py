@@ -165,15 +165,53 @@ def _composite_sidebar_static() -> ui.Tag:
                 {"class": "group-description"},
                 "Statistical method for cross-dataset comparison",
             ),
+            ui.div(
+                {"class": "dto-radio-row"},
+                ui.input_radio_buttons(
+                    "composite_method",
+                    label=None,
+                    choices={
+                        "dto": "DTO",
+                        "rank_response_pvalue": "Rank Response",
+                        "univariate_pvalue": "Univariate P-value",
+                    },
+                    selected="dto",
+                ),
+                ui.div(
+                    {"class": "dto-links"},
+                    ui.a(
+                        "Paper",
+                        href="https://pubmed.ncbi.nlm.nih.gov/" "32060051/",
+                        target="_blank",
+                        rel="noopener noreferrer",
+                        class_="btn-configure",
+                    ),
+                    ui.a(
+                        "Dataset",
+                        href="https://huggingface.co/datasets/"
+                        "BrentLab/yeast_comparative_analysis",
+                        target="_blank",
+                        rel="noopener noreferrer",
+                        class_="btn-configure",
+                    ),
+                ),
+            ),
+        ),
+        ui.div(
+            {"class": "mb-md"},
+            ui.div({"class": "group-header"}, "Plot Layout"),
+            ui.div(
+                {"class": "group-description"},
+                "Choose how sources map to plot axes",
+            ),
             ui.input_radio_buttons(
-                "composite_method",
+                "composite_plot_layout",
                 label=None,
                 choices={
-                    "dto": "DTO",
-                    "rank_response_pvalue": "Rank Response",
-                    "univariate_pvalue": "Univariate P-value",
+                    "binding_color": "Color: Binding, Facet: Perturbation",
+                    "perturbation_color": "Color: Perturbation, Facet: Binding",
                 },
-                selected="dto",
+                selected="binding_color",
             ),
         ),
         ui.div(
@@ -306,11 +344,18 @@ def analysis_sidebar_server(
             # Use source display name if available, otherwise fall back to dataset name
             display_name = source_name_map.get(source_key, d.get("name", db_name))
             choices[db_name] = display_name
+        config_selected = analysis_config().get("composite_binding_datasets")
+        if isinstance(config_selected, list) and config_selected:
+            restored = [k for k in config_selected if k in choices]
+            if not restored:
+                restored = list(choices.keys())
+        else:
+            restored = list(choices.keys())
         return ui.input_checkbox_group(
             "composite_binding_datasets",
             label=None,
             choices=choices,
-            selected=list(choices.keys()),
+            selected=restored,
         )
 
     @render.ui
@@ -341,11 +386,18 @@ def analysis_sidebar_server(
             # Use source display name if available, otherwise fall back to dataset name
             display_name = source_name_map.get(source_key, d.get("name", db_name))
             choices[db_name] = display_name
+        config_selected = analysis_config().get("composite_perturbation_datasets")
+        if isinstance(config_selected, list) and config_selected:
+            restored = [k for k in config_selected if k in choices]
+            if not restored:
+                restored = list(choices.keys())
+        else:
+            restored = list(choices.keys())
         return ui.input_checkbox_group(
             "composite_perturbation_datasets",
             label=None,
             choices=choices,
-            selected=list(choices.keys()),
+            selected=restored,
         )
 
     @render.ui
@@ -410,6 +462,29 @@ def analysis_sidebar_server(
         )
 
     @reactive.effect
+    def _sync_composite_controls_from_config() -> None:
+        if active_module() != "composite":
+            return
+
+        config = analysis_config()
+        ui.update_radio_buttons(
+            "composite_method",
+            selected=str(config.get("composite_method", "dto")),
+        )
+        ui.update_radio_buttons(
+            "composite_plot_layout",
+            selected=str(config.get("composite_plot_layout", "binding_color")),
+        )
+        ui.update_select(
+            "composite_filter_operator",
+            selected=str(config.get("composite_filter_operator", "<=")),
+        )
+        ui.update_numeric(
+            "composite_filter_threshold",
+            value=float(config.get("composite_filter_threshold", 1.0)),
+        )
+
+    @reactive.effect
     def _update_dataset_choices() -> None:
         if active_module() in ("selection", "composite"):
             return
@@ -469,6 +544,7 @@ def analysis_sidebar_server(
             method = str(input.composite_method())
             threshold = float(input.composite_filter_threshold())
             operator = str(input.composite_filter_operator())
+            plot_layout = str(input.composite_plot_layout())
         except Exception:
             return
 
@@ -493,6 +569,7 @@ def analysis_sidebar_server(
                 "composite_filter_operator": operator,
                 "composite_binding_datasets": bd_selected,
                 "composite_perturbation_datasets": pr_selected,
+                "composite_plot_layout": plot_layout,
             }
         )
         _set_config_if_changed(next_config)
