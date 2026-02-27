@@ -9,13 +9,12 @@ from typing import Any
 import pandas as pd
 from shiny import module, reactive, render, ui
 
-from tfbpshiny.data_service import get_dto_data, get_or_create_vdb
-from tfbpshiny.mock_data import (
-    get_mock_correlation,
-    get_mock_pairwise_comparison,
-    get_mock_source_summary,
-    get_mock_table_data,
+from tfbpshiny.data_service import (
+    get_dto_data,
+    get_median_correlation_matrix,
+    get_or_create_vdb,
 )
+from tfbpshiny.mock_data import get_mock_source_summary
 from tfbpshiny.utils.create_distribution_plot import create_distribution_plot
 from tfbpshiny.utils.source_name_lookup import get_source_name_dict
 from tfbpshiny.utils.transforms import neglog10_with_pseudocount
@@ -111,6 +110,41 @@ def analysis_workspace_server(
 
         return selected_db, comparison_db, comparison_mode
 
+    @reactive.calc
+    def _vdb_for_correlation() -> tuple[Any, dict[str, Any]] | None:
+        """
+        Cache VDB and correlation result for current correlation view.
+
+        Memoized by the relevant datasets and value column. This prevents duplicate
+        expensive VDB creation when switching views or modules.
+
+        """
+        config = analysis_config()
+        view = str(config.get("view", ""))
+
+        # Only create VDB when in correlation view.
+        if view != "correlation":
+            return None
+
+        relevant = _relevant_datasets()
+        db_names = [
+            str(dataset.get("db_name") or dataset.get("dbName")) for dataset in relevant
+        ]
+
+        if len(db_names) < 2:
+            return None
+
+        value_column = str(config.get("correlation_value_column", ""))
+        if not value_column:
+            return None
+
+        try:
+            vdb = get_or_create_vdb(db_names)
+            result = get_median_correlation_matrix(db_names, value_column, vdb)
+            return (vdb, result)
+        except Exception:
+            return None
+
     @render.ui
     def workspace_title() -> ui.Tag:
         module_name = active_module()
@@ -150,39 +184,25 @@ def analysis_workspace_server(
                 ),
             )
 
-        if view == "table":
-            return _render_table(
-                db_name=selected_db,
-                p_value=float(config.get("p_value", 0.05)),
-                log2fc_threshold=float(config.get("log2fc_threshold", 1.0)),
-                comparison_db=(comparison_db if comparison_mode else ""),
-            )
-
-        if view == "correlation":
-            return _render_correlation(selected_db)
-
         if view == "summary":
             if comparison_mode and comparison_db:
                 return _render_summary_comparison(selected_db, comparison_db)
             return _render_summary(selected_db)
 
-        if view == "compare":
-            if not comparison_mode or not comparison_db:
+        if view == "correlation":
+            # Use cached VDB and correlation result.
+            cached = _vdb_for_correlation()
+            if cached is None:
                 return ui.div(
                     {"class": "empty-state"},
-                    ui.h3("Comparison Mode Required"),
+                    ui.h3("Correlation data unavailable"),
                     ui.p(
-                        "Select two datasets from Intersection "
-                        "Summary and open analysis."
+                        "Select a valid value column present in at least two datasets."
                     ),
                 )
-
-            return _render_pairwise_compare(
-                db_name_a=selected_db,
-                db_name_b=comparison_db,
-                value_column=str(config.get("correlation_value_column", "effect_size")),
-                group_by=str(config.get("correlation_group_by", "regulator")),
-            )
+            _, result = cached
+            value_column = str(config.get("correlation_value_column", ""))
+            return _render_correlation_from_result(result, value_column)
 
         return ui.div({"class": "empty-state"}, ui.p("Unknown view mode."))
 
@@ -390,47 +410,6 @@ def _render_composite(
     )
 
 
-def _render_table(
-    db_name: str,
-    p_value: float,
-    log2fc_threshold: float,
-    comparison_db: str = "",
-) -> ui.Tag:
-    """Render filtered table analysis for one dataset."""
-    data = get_mock_table_data(db_name, page=1, page_size=250)
-    df = pd.DataFrame(data["rows"])
-
-    if not df.empty:
-        df = df[df["p_value"] <= float(p_value)]
-        df = df[df["log2fc"].abs() >= float(log2fc_threshold)]
-
-    preview = df.head(50)
-
-    header_bits = [
-        f"Showing {len(preview):,} of {len(df):,} filtered rows",
-        f"(p <= {p_value:.3f}, |log2FC| >= {log2fc_threshold:.2f})",
-    ]
-    if comparison_db:
-        header_bits.append(f"Pairwise context with {comparison_db}")
-
-    if preview.empty:
-        return ui.div(
-            {"class": "card"},
-            ui.div({"class": "card-header"}, " | ".join(header_bits)),
-            ui.div(
-                {"class": "empty-state compact"},
-                ui.h3("No rows passed current filters"),
-                ui.p("Relax p-value or |log2FC| threshold to include more rows."),
-            ),
-        )
-
-    return ui.div(
-        {"class": "card"},
-        ui.div({"class": "card-header"}, " | ".join(header_bits)),
-        ui.HTML(preview.to_html(index=False, classes="table table-sm table-striped")),
-    )
-
-
 def _render_summary(db_name: str) -> ui.Tag:
     """Render source summary for one dataset."""
     summary = get_mock_source_summary(db_name)
@@ -557,113 +536,74 @@ def _render_summary_comparison(db_name_a: str, db_name_b: str) -> ui.Tag:
     )
 
 
-def _render_pairwise_compare(
-    db_name_a: str,
-    db_name_b: str,
+def _render_correlation_matrix(
+    db_names: list[str],
     value_column: str,
-    group_by: str,
 ) -> ui.Tag:
-    """Render pairwise comparison stats and ranked difference table."""
-    result = get_mock_pairwise_comparison(
-        db_name_a=db_name_a,
-        db_name_b=db_name_b,
-        value_column=value_column,
-        group_by=group_by,
-        max_points=4000,
-    )
-
-    points = result.get("points", [])
-    if not points:
+    """Render median-of-per-TF-correlations matrix across selected datasets."""
+    if len(db_names) < 2:
         return ui.div(
             {"class": "empty-state"},
-            ui.h3("No overlapping entities found"),
-            ui.p("Try a different value column or grouping mode."),
+            ui.h3("Need at least 2 datasets"),
+            ui.p("Select two or more datasets to compute a correlation matrix."),
         )
 
-    df = pd.DataFrame(points)
-    mean_delta = float(df["delta"].mean()) if not df.empty else 0.0
-    up_count = int((df["delta"] > 0).sum())
-    down_count = int((df["delta"] < 0).sum())
+    try:
+        vdb = get_or_create_vdb(db_names)
+        result = get_median_correlation_matrix(db_names, value_column, vdb)
+    except Exception as e:
+        return ui.div(
+            {"class": "empty-state"},
+            ui.h3("Error computing correlation matrix"),
+            ui.p(f"Error: {e}"),
+        )
 
-    preview = df.head(50)
-
-    return ui.div(
-        {"style": "display:flex; flex-direction:column; gap:16px;"},
-        ui.div(
-            {"class": "card"},
-            ui.div(
-                {"class": "card-header"},
-                f"Pairwise Comparison: {result['db_name_a']} vs {result['db_name_b']}",
-            ),
-            ui.p(
-                {
-                    "style": "margin:0;"
-                    " color:var(--color-text-muted);"
-                    " font-size:12px;"
-                },
-                f"Group by {result['group_by']}"
-                f" | Value column: {result['value_column']}",
-            ),
-        ),
-        ui.div(
-            {"class": "stat-grid"},
-            ui.div(
-                {"class": "stat-box"},
-                ui.div({"class": "stat-value"}, f"{int(result['total_entities']):,}"),
-                ui.div({"class": "stat-label"}, "Common Entities"),
-            ),
-            ui.div(
-                {"class": "stat-box"},
-                ui.div(
-                    {"class": "stat-value"},
-                    (
-                        "N/A"
-                        if result.get("correlation") is None
-                        else f"{float(result['correlation']):.3f}"
-                    ),
-                ),
-                ui.div({"class": "stat-label"}, "Correlation"),
-            ),
-            ui.div(
-                {"class": "stat-box"},
-                ui.div({"class": "stat-value"}, f"{mean_delta:+.3f}"),
-                ui.div({"class": "stat-label"}, "Mean Delta (B-A)"),
-            ),
-            ui.div(
-                {"class": "stat-box"},
-                ui.div({"class": "stat-value"}, f"{up_count:,} / {down_count:,}"),
-                ui.div({"class": "stat-label"}, "Positive / Negative"),
-            ),
-        ),
-        ui.div(
-            {"class": "card"},
-            ui.div({"class": "card-header"}, "Top Absolute Differences"),
-            ui.HTML(
-                preview.to_html(index=False, classes="table table-sm table-striped")
-            ),
-        ),
-    )
+    return _render_correlation_from_result(result, value_column)
 
 
-def _render_correlation(db_name: str) -> ui.Tag:
-    """Render correlation matrix table preview."""
-    corr = get_mock_correlation(db_name)
-    labels = corr.get("labels", [])
-    matrix = corr.get("matrix", [])
+def _render_correlation_from_result(
+    result: dict[str, Any],
+    value_column: str,
+) -> ui.Tag:
+    """Render correlation matrix from pre-computed result dict."""
+    labels = result.get("labels", [])
+    matrix = result.get("matrix", [])
 
-    if not labels or not matrix:
+    # Reject results with fewer than 2 datasets - a 1x1 matrix (value 1.0) is not
+    # a meaningful cross-dataset correlation.
+    if not labels or not matrix or len(labels) < 2:
         return ui.div(
             {"class": "empty-state"},
             ui.h3("Correlation data unavailable"),
-            ui.p("No data returned for this dataset."),
+            ui.p(
+                "The selected value column is not present in at least two datasets. "
+                "Choose a different column or select datasets that share this measure."
+            ),
         )
 
-    df = pd.DataFrame(matrix, index=labels, columns=labels)
+    # Build HTML table with formatted values.
+    header_cells = [ui.tags.th("")] + [ui.tags.th(lbl) for lbl in labels]
+    rows: list[ui.Tag] = []
+    for i, row_label in enumerate(labels):
+        cells = [ui.tags.td(ui.tags.strong(row_label))]
+        for j in range(len(labels)):
+            val = matrix[i][j]
+            if val is None:
+                cells.append(ui.tags.td("--"))
+            else:
+                cells.append(ui.tags.td(f"{val:.3f}"))
+        rows.append(ui.tags.tr(*cells))
 
     return ui.div(
         {"class": "card"},
         ui.div(
-            {"class": "card-header"}, f"Correlation Matrix ({len(labels)} entities)"
+            {"class": "card-header"},
+            f"Median Correlation Matrix ({len(labels)} datasets, "
+            f"value: {value_column})",
         ),
-        ui.HTML(df.round(3).to_html(classes="table table-sm table-striped")),
+        ui.tags.table(
+            {"class": "table table-sm table-striped"},
+            ui.tags.thead(ui.tags.tr(*header_cells)),
+            ui.tags.tbody(*rows),
+        ),
     )
