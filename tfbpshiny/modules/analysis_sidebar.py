@@ -172,8 +172,6 @@ def _composite_sidebar_static() -> ui.Tag:
                     label=None,
                     choices={
                         "dto": "DTO",
-                        "rank_response_pvalue": "Rank Response",
-                        "univariate_pvalue": "Univariate P-value",
                     },
                     selected="dto",
                 ),

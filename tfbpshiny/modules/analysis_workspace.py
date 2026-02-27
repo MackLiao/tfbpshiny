@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 import operator as op
 from typing import Any
 
@@ -10,7 +11,6 @@ from shiny import module, reactive, render, ui
 
 from tfbpshiny.data_service import get_dto_data, get_or_create_vdb
 from tfbpshiny.mock_data import (
-    get_mock_composite_data,
     get_mock_correlation,
     get_mock_pairwise_comparison,
     get_mock_source_summary,
@@ -20,10 +20,10 @@ from tfbpshiny.utils.create_distribution_plot import create_distribution_plot
 from tfbpshiny.utils.source_name_lookup import get_source_name_dict
 from tfbpshiny.utils.transforms import neglog10_with_pseudocount
 
+logger = logging.getLogger("shiny")
+
 _COMPOSITE_METHOD_LABELS: dict[str, str] = {
     "dto": "DTO",
-    "rank_response_pvalue": "Rank Response P-value",
-    "univariate_pvalue": "Univariate P-value",
 }
 
 _OPERATOR_MAP: dict[str, Any] = {
@@ -234,42 +234,25 @@ def _render_composite(
         db_name = str(d.get("db_name", ""))
         name_map[db_name] = source_name_map.get(source_key, db_name)
 
-    # For DTO method, use real data from VirtualDB
-    df = pd.DataFrame()  # Initialize to ensure df is always defined
-    if method == "dto":
-        try:
-            # Create VirtualDB with selected datasets + DTO
-            all_db_names = bd_names + pr_names + ["dto"]
-            vdb = get_or_create_vdb(all_db_names)
+    # Query DTO data from VirtualDB
+    df = pd.DataFrame()
+    try:
+        all_db_names = bd_names + pr_names + ["dto"]
+        vdb = get_or_create_vdb(all_db_names)
+        raw = get_dto_data(bd_names, pr_names, vdb)
 
-            # Query DTO data
-            raw = get_dto_data(bd_names, pr_names, vdb)
-
-            if raw:
-                df = pd.DataFrame(raw)
-                # Map column names to match what create_distribution_plot expects
-                df = df.rename(
-                    columns={
-                        "binding_id": "binding_source",
-                        "perturbation_id": "expression_source",
-                    }
-                )
-                # Use dto_pvalue as the "dto" column
-                if "dto_pvalue" in df.columns:
-                    df["dto"] = df["dto_pvalue"]
-        except Exception as e:
-            # Fall back to mock data on error
-            import logging
-
-            logging.getLogger("shiny").warning(
-                f"Failed to get DTO data, falling back to mock: {e}"
+        if raw:
+            df = pd.DataFrame(raw)
+            df = df.rename(
+                columns={
+                    "binding_id": "binding_source",
+                    "perturbation_id": "perturbation_source",
+                }
             )
-            raw = get_mock_composite_data(bd_names, pr_names, name_map=name_map)
-            df = pd.DataFrame(raw) if raw else pd.DataFrame()
-    else:
-        # Use mock data for other methods
-        raw = get_mock_composite_data(bd_names, pr_names, name_map=name_map)
-        df = pd.DataFrame(raw) if raw else pd.DataFrame()
+            if "dto_pvalue" in df.columns:
+                df["dto"] = df["dto_pvalue"]
+    except Exception as e:
+        logger.warning("Failed to get DTO data: %s", e)
 
     if df.empty:
         return ui.div(
@@ -320,10 +303,10 @@ def _render_composite(
         filtered = filtered.rename(
             columns={
                 "binding_source": "_tmp_binding",
-                "expression_source": "binding_source",
+                "perturbation_source": "binding_source",
             }
         )
-        filtered = filtered.rename(columns={"_tmp_binding": "expression_source"})
+        filtered = filtered.rename(columns={"_tmp_binding": "perturbation_source"})
         color_label = "Perturbation Source"
         facet_label = "Binding Source"
     else:
@@ -336,7 +319,7 @@ def _render_composite(
     if method != "dto":
         # Count all color-axis sources per facet (including those with no
         # passing rows) so the denominator isn't weakened by strict thresholds.
-        sources_per_facet = filtered.groupby("expression_source")[
+        sources_per_facet = filtered.groupby("perturbation_source")[
             "binding_source"
         ].nunique()
 
@@ -344,21 +327,21 @@ def _render_composite(
             # For each (facet, regulator), count distinct color sources
             # that have at least one non-NA (passing) value.
             non_na = filtered.dropna(subset=[method])
-            coverage = non_na.groupby(["expression_source", "regulator_symbol"])[
+            coverage = non_na.groupby(["perturbation_source", "regulator_symbol"])[
                 "binding_source"
             ].nunique()
             # Keep regulators covering all sources *within their own facet*.
             shared = coverage.reset_index(name="n_sources")
             shared = shared.merge(
                 sources_per_facet.rename("n_facet_sources"),
-                on="expression_source",
+                on="perturbation_source",
             )
             shared = shared.loc[
                 shared["n_sources"] == shared["n_facet_sources"],
-                ["expression_source", "regulator_symbol"],
+                ["perturbation_source", "regulator_symbol"],
             ]
             filtered = filtered.merge(
-                shared, on=["expression_source", "regulator_symbol"]
+                shared, on=["perturbation_source", "regulator_symbol"]
             )
 
     if filtered.empty:
