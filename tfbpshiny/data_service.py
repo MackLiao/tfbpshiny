@@ -12,6 +12,7 @@ import logging
 import math
 import os
 import re
+import statistics
 import tempfile
 import threading
 from pathlib import Path
@@ -672,3 +673,210 @@ def get_dto_data(
         )
 
     return results
+
+
+# ---------------------------------------------------------------------------
+# 7. Median Correlation Matrix
+# ---------------------------------------------------------------------------
+
+
+def _pearson_correlation(x: list[float], y: list[float]) -> float | None:
+    """Compute Pearson correlation between two equal-length float lists."""
+    n = len(x)
+    if n < 2 or n != len(y):
+        return None
+
+    mean_x = sum(x) / n
+    mean_y = sum(y) / n
+    dx = [xi - mean_x for xi in x]
+    dy = [yi - mean_y for yi in y]
+
+    num = sum(a * b for a, b in zip(dx, dy))
+    denom_x = math.sqrt(sum(a * a for a in dx))
+    denom_y = math.sqrt(sum(b * b for b in dy))
+
+    if denom_x == 0 or denom_y == 0:
+        return None
+    return num / (denom_x * denom_y)
+
+
+def get_median_correlation_matrix(
+    db_names: list[str],
+    value_column: str,
+    vdb: VirtualDB,
+) -> dict[str, Any]:
+    """
+    Compute a median-of-per-TF-correlations matrix across datasets.
+
+    For each pair of datasets (A, B):
+    1. Find common TFs (regulators).
+    2. For each common TF, find shared targets, compute Pearson on *value_column*.
+    3. The cell value is the median of the per-TF correlations.
+
+    """
+    safe_value_col = _validate_identifier(value_column)
+
+    # --- gather per-dataset data: {db_name: {tf: {target: value}}} ---
+    dataset_data: dict[str, dict[str, dict[str, float]]] = {}
+    valid_db_names: list[str] = []
+
+    for db_name in db_names:
+        safe_table = _validate_identifier(f"{db_name}_meta")
+        try:
+            fields = set(vdb.get_fields(safe_table))
+        except Exception:
+            logger.warning("Cannot get fields for %s", safe_table)
+            continue
+
+        if safe_value_col not in fields:
+            logger.debug("Dataset %s missing column %s", db_name, value_column)
+            continue
+
+        # Resolve regulator column
+        if "regulator_symbol" in fields:
+            reg_col = "regulator_symbol"
+        elif "regulator_locus_tag" in fields:
+            reg_col = "regulator_locus_tag"
+        else:
+            continue
+
+        # Resolve target column
+        if "target_locus_tag" in fields:
+            tgt_col = "target_locus_tag"
+        elif "target_symbol" in fields:
+            tgt_col = "target_symbol"
+        else:
+            continue
+
+        sql = (
+            f"SELECT {reg_col} AS reg, {tgt_col} AS tgt, {safe_value_col} AS val "
+            f"FROM {safe_table} WHERE {safe_value_col} IS NOT NULL"
+        )
+        try:
+            df = vdb.query(sql)
+        except Exception:
+            logger.warning("Failed query for %s", db_name, exc_info=True)
+            continue
+
+        # Collect all values per (TF, target) pair, then aggregate with mean.
+        # This handles duplicate rows from sample-level data correctly.
+        tf_target_values: dict[str, dict[str, list[float]]] = {}
+        for _, row in df.iterrows():
+            parsed = _to_float_or_none(row["val"])
+            if parsed is None:
+                continue
+            # Skip rows with null/missing regulator or target IDs.
+            tf_raw = row["reg"]
+            tgt_raw = row["tgt"]
+            if tf_raw is None or tgt_raw is None:
+                continue
+            tf = str(tf_raw).strip()
+            tgt = str(tgt_raw).strip()
+            # Skip empty or placeholder strings.
+            if not tf or not tgt or tf.lower() in ("nan", "none", "null", ""):
+                continue
+            if not tgt or tgt.lower() in ("nan", "none", "null", ""):
+                continue
+            tf_target_values.setdefault(tf, {}).setdefault(tgt, []).append(parsed)
+
+        # Aggregate: compute mean of all values for each (TF, target) pair.
+        tf_target_map: dict[str, dict[str, float]] = {}
+        for tf, targets in tf_target_values.items():
+            tf_target_map[tf] = {}
+            for tgt, vals in targets.items():
+                if len(vals) == 1:
+                    tf_target_map[tf][tgt] = vals[0]
+                else:
+                    # Use mean: deterministic, appropriate for continuous values
+                    tf_target_map[tf][tgt] = sum(vals) / len(vals)
+
+        dataset_data[db_name] = tf_target_map
+        valid_db_names.append(db_name)
+
+    n = len(valid_db_names)
+    matrix: list[list[float | None]] = [[None] * n for _ in range(n)]
+
+    for i in range(n):
+        matrix[i][i] = 1.0
+
+    for i in range(n):
+        for j in range(i + 1, n):
+            data_a = dataset_data[valid_db_names[i]]
+            data_b = dataset_data[valid_db_names[j]]
+            common_tfs = set(data_a.keys()) & set(data_b.keys())
+
+            per_tf_corrs: list[float] = []
+            for tf in common_tfs:
+                targets_a = data_a[tf]
+                targets_b = data_b[tf]
+                shared_targets = set(targets_a.keys()) & set(targets_b.keys())
+                if len(shared_targets) < 2:
+                    continue
+                sorted_targets = sorted(shared_targets)
+                x = [targets_a[t] for t in sorted_targets]
+                y = [targets_b[t] for t in sorted_targets]
+                r = _pearson_correlation(x, y)
+                if r is not None:
+                    per_tf_corrs.append(r)
+
+            if per_tf_corrs:
+                median_val = statistics.median(per_tf_corrs)
+                matrix[i][j] = median_val
+                matrix[j][i] = median_val
+
+    return {"labels": valid_db_names, "matrix": matrix}
+
+
+# ---------------------------------------------------------------------------
+# 8. Shared numeric columns across datasets
+# ---------------------------------------------------------------------------
+
+_STRUCTURAL_COLUMNS = frozenset(
+    {
+        "sample_id",
+        "regulator_symbol",
+        "regulator_locus_tag",
+        "target_symbol",
+        "target_locus_tag",
+    }
+)
+
+
+def get_shared_numeric_columns(
+    db_names: list[str],
+    vdb: VirtualDB,
+) -> list[str]:
+    """
+    Return sorted numeric columns available across datasets' meta tables.
+
+    Returns the **union** of numeric columns found in any dataset, because each
+    dataset may use different column names for its quantitative measures (e.g.
+    ``enrichment`` for binding, ``M`` for perturbation).
+    ``get_median_correlation_matrix`` already skips datasets that lack the
+    selected column, so showing all available columns lets users pick whichever
+    measure is relevant.
+
+    Excludes structural columns (identifiers) that aren't analysis values.
+
+    """
+    if not db_names:
+        return []
+
+    all_cols: set[str] = set()
+    for db_name in db_names:
+        safe_table = _validate_identifier(f"{db_name}_meta")
+        try:
+            desc_df = vdb.describe(safe_table)
+        except Exception:
+            logger.warning("Cannot describe table %s", safe_table, exc_info=True)
+            continue
+
+        for _, row in desc_df.iterrows():
+            col_name = str(row["column_name"])
+            col_type = str(row["column_type"])
+            if col_name in _STRUCTURAL_COLUMNS:
+                continue
+            if _NUMERIC_TYPE_PATTERN.search(col_type):
+                all_cols.add(col_name)
+
+    return sorted(all_cols)

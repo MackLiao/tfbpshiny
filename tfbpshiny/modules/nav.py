@@ -10,7 +10,7 @@ from shiny import module, reactive, render, ui
 _MODULE_ITEMS: list[dict[str, str]] = [
     {"id": "selection", "label": "Selection", "tag": "Select Datasets"},
     {"id": "binding", "label": "Binding", "tag": "Binding"},
-    {"id": "perturbation", "label": "Perturbation", "tag": "Perturb"},
+    {"id": "perturbation", "label": "Perturbation", "tag": "Perturbation"},
     {"id": "composite", "label": "Comparison", "tag": "Comparison"},
 ]
 

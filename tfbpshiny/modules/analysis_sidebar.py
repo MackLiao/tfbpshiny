@@ -6,7 +6,11 @@ from typing import Any
 
 from shiny import module, reactive, render, ui
 
-from tfbpshiny.data_service import get_dto_config
+from tfbpshiny.data_service import (
+    get_dto_config,
+    get_or_create_vdb,
+    get_shared_numeric_columns,
+)
 from tfbpshiny.utils.source_name_lookup import get_source_name_dict
 
 _MODULE_LABELS: dict[str, str] = {
@@ -42,12 +46,10 @@ def _standard_sidebar_body() -> ui.Tag:
                 "view_mode",
                 label=None,
                 choices={
-                    "table": "Table",
-                    "correlation": "Correlation",
                     "summary": "Summary",
-                    "compare": "Compare",
+                    "correlation": "Correlation",
                 },
-                selected="table",
+                selected="summary",
             ),
         ),
         ui.div(
@@ -98,59 +100,12 @@ def _standard_sidebar_body() -> ui.Tag:
         ),
         ui.div(
             {"class": "mb-md"},
-            ui.div({"class": "group-header"}, "Correlation Settings"),
+            ui.div({"class": "group-header"}, "Value Column"),
             ui.div(
                 {"class": "group-description"},
-                "Configure correlation analysis parameters",
+                "Column used for correlation analysis",
             ),
-            ui.input_select(
-                "correlation_value_column",
-                label="Value column",
-                choices={
-                    "effect_size": "effect_size",
-                    "score": "score",
-                    "p_value": "p_value",
-                    "confidence": "confidence",
-                    "time_min": "time_min",
-                },
-                selected="effect_size",
-                width="100%",
-            ),
-            ui.input_select(
-                "correlation_group_by",
-                label="Group by",
-                choices={
-                    "regulator": "Regulator",
-                    "target": "Target",
-                    "sample": "Sample",
-                },
-                selected="regulator",
-                width="100%",
-            ),
-        ),
-        ui.div(
-            {"class": "mb-md"},
-            ui.div({"class": "group-header"}, "Filters"),
-            ui.div(
-                {"class": "group-description"},
-                "Filter results by statistical thresholds",
-            ),
-            ui.input_slider(
-                "p_value",
-                "Max p-value",
-                min=0.001,
-                max=1.0,
-                value=0.05,
-                step=0.001,
-            ),
-            ui.input_numeric(
-                "log2fc_threshold",
-                "Min |log2FC|",
-                value=1.0,
-                min=0,
-                max=10,
-                step=0.1,
-            ),
+            ui.output_ui("value_column_choices"),
         ),
     )
 
@@ -165,15 +120,51 @@ def _composite_sidebar_static() -> ui.Tag:
                 {"class": "group-description"},
                 "Statistical method for cross-dataset comparison",
             ),
+            ui.div(
+                {"class": "dto-radio-row"},
+                ui.input_radio_buttons(
+                    "composite_method",
+                    label=None,
+                    choices={
+                        "dto": "DTO",
+                    },
+                    selected="dto",
+                ),
+                ui.div(
+                    {"class": "dto-links"},
+                    ui.a(
+                        "Paper",
+                        href="https://pubmed.ncbi.nlm.nih.gov/" "32060051/",
+                        target="_blank",
+                        rel="noopener noreferrer",
+                        class_="btn-configure",
+                    ),
+                    ui.a(
+                        "Dataset",
+                        href="https://huggingface.co/datasets/"
+                        "BrentLab/yeast_comparative_analysis",
+                        target="_blank",
+                        rel="noopener noreferrer",
+                        class_="btn-configure",
+                    ),
+                ),
+            ),
+        ),
+        ui.div(
+            {"class": "mb-md"},
+            ui.div({"class": "group-header"}, "Plot Layout"),
+            ui.div(
+                {"class": "group-description"},
+                "Choose how sources map to plot axes",
+            ),
             ui.input_radio_buttons(
-                "composite_method",
+                "composite_plot_layout",
                 label=None,
                 choices={
-                    "dto": "DTO",
-                    "rank_response_pvalue": "Rank Response",
-                    "univariate_pvalue": "Univariate P-value",
+                    "binding_color": "Color: Binding, Facet: Perturbation",
+                    "perturbation_color": "Color: Perturbation, Facet: Binding",
                 },
-                selected="dto",
+                selected="binding_color",
             ),
         ),
         ui.div(
@@ -214,7 +205,7 @@ def _composite_sidebar_static() -> ui.Tag:
                             ">": ">",
                             ">=": ">=",
                         },
-                        selected="<=",
+                        selected=">=",
                         width="80px",
                     ),
                 ),
@@ -223,10 +214,10 @@ def _composite_sidebar_static() -> ui.Tag:
                     ui.input_numeric(
                         "composite_filter_threshold",
                         "Threshold",
-                        value=1.0,
+                        value=1.3,
                         min=0,
-                        max=1.0,
-                        step=0.001,
+                        max=10.0,
+                        step=0.1,
                     ),
                 ),
             ),
@@ -270,6 +261,29 @@ def analysis_sidebar_server(
             if _module_type_filter(current_module, dataset)
         ]
 
+    @reactive.calc
+    def _vdb_for_module() -> tuple[Any, list[str]] | None:
+        """
+        Cache VDB and numeric columns for current module's datasets.
+
+        Memoized by the sorted db_names of relevant datasets. This prevents duplicate
+        expensive VDB creation when switching modules.
+
+        """
+        relevant = _relevant_datasets()
+        db_names = [str(d["db_name"]) for d in relevant]
+
+        # Need at least 2 datasets to make correlation meaningful.
+        if len(db_names) < 2:
+            return None
+
+        try:
+            vdb = get_or_create_vdb(db_names)
+            columns = get_shared_numeric_columns(db_names, vdb)
+            return (vdb, columns)
+        except Exception:
+            return None
+
     def _set_config_if_changed(next_config: dict[str, Any]) -> None:
         if next_config != analysis_config():
             analysis_config.set(next_config)
@@ -306,11 +320,18 @@ def analysis_sidebar_server(
             # Use source display name if available, otherwise fall back to dataset name
             display_name = source_name_map.get(source_key, d.get("name", db_name))
             choices[db_name] = display_name
+        config_selected = analysis_config().get("composite_binding_datasets")
+        if isinstance(config_selected, list) and config_selected:
+            restored = [k for k in config_selected if k in choices]
+            if not restored:
+                restored = list(choices.keys())
+        else:
+            restored = list(choices.keys())
         return ui.input_checkbox_group(
             "composite_binding_datasets",
             label=None,
             choices=choices,
-            selected=list(choices.keys()),
+            selected=restored,
         )
 
     @render.ui
@@ -341,11 +362,59 @@ def analysis_sidebar_server(
             # Use source display name if available, otherwise fall back to dataset name
             display_name = source_name_map.get(source_key, d.get("name", db_name))
             choices[db_name] = display_name
+        config_selected = analysis_config().get("composite_perturbation_datasets")
+        if isinstance(config_selected, list) and config_selected:
+            restored = [k for k in config_selected if k in choices]
+            if not restored:
+                restored = list(choices.keys())
+        else:
+            restored = list(choices.keys())
         return ui.input_checkbox_group(
             "composite_perturbation_datasets",
             label=None,
             choices=choices,
-            selected=list(choices.keys()),
+            selected=restored,
+        )
+
+    @render.ui
+    def value_column_choices() -> ui.Tag:
+        relevant = _relevant_datasets()
+        db_names = [str(d["db_name"]) for d in relevant]
+
+        if len(db_names) < 2:
+            return ui.p(
+                {"style": "font-size:12px; color:var(--color-text-muted);"},
+                "Need 2+ datasets for correlation.",
+            )
+
+        # Use cached VDB and columns from _vdb_for_module().
+        cached = _vdb_for_module()
+        if cached is None:
+            return ui.p(
+                {"style": "font-size:12px; color:var(--color-text-muted);"},
+                "Unable to load column metadata. Check connection.",
+            )
+
+        _, columns = cached
+
+        if not columns:
+            return ui.p(
+                {"style": "font-size:12px; color:var(--color-text-muted);"},
+                "No numeric columns found in selected datasets.",
+            )
+
+        choices = {c: c for c in columns}
+
+        # Restore previous selection if still valid.
+        prev = analysis_config().get("correlation_value_column", "")
+        selected = prev if prev in choices else columns[0]
+
+        return ui.input_select(
+            "correlation_value_column",
+            label="Value column",
+            choices=choices,
+            selected=selected,
+            width="100%",
         )
 
     @render.ui
@@ -390,23 +459,34 @@ def analysis_sidebar_server(
             return
 
         config = analysis_config()
-        ui.update_radio_buttons("view_mode", selected=str(config.get("view", "table")))
+        ui.update_radio_buttons(
+            "view_mode", selected=str(config.get("view", "summary"))
+        )
         ui.update_switch(
             "comparison_mode", value=bool(config.get("comparison_mode", False))
         )
 
-        ui.update_slider("p_value", value=float(config.get("p_value", 0.05)))
+    @reactive.effect
+    def _sync_composite_controls_from_config() -> None:
+        if active_module() != "composite":
+            return
+
+        config = analysis_config()
+        ui.update_radio_buttons(
+            "composite_method",
+            selected=str(config.get("composite_method", "dto")),
+        )
+        ui.update_radio_buttons(
+            "composite_plot_layout",
+            selected=str(config.get("composite_plot_layout", "binding_color")),
+        )
+        ui.update_select(
+            "composite_filter_operator",
+            selected=str(config.get("composite_filter_operator", ">=")),
+        )
         ui.update_numeric(
-            "log2fc_threshold",
-            value=float(config.get("log2fc_threshold", 1.0)),
-        )
-        ui.update_select(
-            "correlation_value_column",
-            selected=str(config.get("correlation_value_column", "effect_size")),
-        )
-        ui.update_select(
-            "correlation_group_by",
-            selected=str(config.get("correlation_group_by", "regulator")),
+            "composite_filter_threshold",
+            value=float(config.get("composite_filter_threshold", 1.3)),
         )
 
     @reactive.effect
@@ -454,7 +534,7 @@ def analysis_sidebar_server(
         if len(all_keys) < 2 and next_config.get("comparison_mode"):
             next_config["comparison_mode"] = False
             if next_config.get("view") == "compare":
-                next_config["view"] = "table"
+                next_config["view"] = "summary"
 
         _set_config_if_changed(next_config)
 
@@ -469,6 +549,7 @@ def analysis_sidebar_server(
             method = str(input.composite_method())
             threshold = float(input.composite_filter_threshold())
             operator = str(input.composite_filter_operator())
+            plot_layout = str(input.composite_plot_layout())
         except Exception:
             return
 
@@ -493,6 +574,7 @@ def analysis_sidebar_server(
                 "composite_filter_operator": operator,
                 "composite_binding_datasets": bd_selected,
                 "composite_perturbation_datasets": pr_selected,
+                "composite_plot_layout": plot_layout,
             }
         )
         _set_config_if_changed(next_config)
@@ -504,23 +586,50 @@ def analysis_sidebar_server(
 
         current_config = dict(analysis_config())
 
+        # Preserve current config values when inputs aren't available (not mounted yet).
+        # Only update values when inputs successfully return new values.
+
+        # View mode - use current config as base, update only if input is available.
+        view_mode = current_config.get("view", "summary")
         try:
             view_mode = str(input.view_mode())
-            selected_input = input.selected_dataset()
-            selected_dataset = str(
-                selected_input or current_config.get("selected_db_name") or ""
-            )
-            comparison_mode = bool(input.comparison_mode())
-            comparison_input = input.comparison_dataset()
-            comparison_dataset = str(
-                comparison_input or current_config.get("comparison_db_name") or ""
-            )
-            p_value = float(input.p_value())
-            log2fc_threshold = float(input.log2fc_threshold())
-            value_column = str(input.correlation_value_column() or "effect_size")
-            group_by = str(input.correlation_group_by() or "regulator")
         except Exception:
-            return
+            pass  # Keep current config value
+
+        # Selected dataset - preserve current config if input not available.
+        selected_dataset = current_config.get("selected_db_name", "")
+        try:
+            selected_input = input.selected_dataset()
+            if selected_input:
+                selected_dataset = str(selected_input)
+        except Exception:
+            pass  # Keep current config value
+
+        # Comparison mode - preserve current config if input not available.
+        comparison_mode = current_config.get("comparison_mode", False)
+        try:
+            comparison_mode = bool(input.comparison_mode())
+        except Exception:
+            pass  # Keep current config value
+
+        # Comparison dataset - preserve current config if input not available.
+        comparison_dataset = current_config.get("comparison_db_name", "")
+        try:
+            comparison_input = input.comparison_dataset()
+            if comparison_input:
+                comparison_dataset = str(comparison_input)
+        except Exception:
+            pass  # Keep current config value
+
+        # Value column may not exist if fewer than 2 datasets selected.
+        # Preserve current config value when input not available.
+        value_column = current_config.get("correlation_value_column", "")
+        try:
+            value_column_input = input.correlation_value_column()
+            if value_column_input:
+                value_column = str(value_column_input)
+        except Exception:
+            pass  # Keep current config value
 
         relevant_db_names = {
             str(dataset.get("db_name")) for dataset in _relevant_datasets()
@@ -549,7 +658,7 @@ def analysis_sidebar_server(
                 comparison_mode = False
 
         if not comparison_mode and view_mode == "compare":
-            view_mode = "table"
+            view_mode = "summary"
 
         next_config = dict(current_config)
         next_config.update(
@@ -558,10 +667,7 @@ def analysis_sidebar_server(
                 "selected_db_name": selected_dataset,
                 "comparison_mode": comparison_mode,
                 "comparison_db_name": comparison_dataset,
-                "p_value": p_value,
-                "log2fc_threshold": log2fc_threshold,
                 "correlation_value_column": value_column,
-                "correlation_group_by": group_by,
             }
         )
         _set_config_if_changed(next_config)
@@ -593,5 +699,5 @@ def analysis_sidebar_server(
         config["comparison_mode"] = False
         config["comparison_db_name"] = ""
         if config.get("view") == "compare":
-            config["view"] = "table"
+            config["view"] = "summary"
         _set_config_if_changed(config)

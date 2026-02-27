@@ -19,6 +19,9 @@ def create_distribution_plot(
     y_axis_title: str,
     *,
     height: int = 500,
+    color_label: str = "Binding Data Source",
+    facet_label: str = "Perturbation Source",
+    match_yaxes: bool = False,
 ) -> Figure:
     """
     Create a faceted box-plot of *y_column* by binding x perturbation source.
@@ -26,7 +29,7 @@ def create_distribution_plot(
     Category orders and color assignments are derived from the actual unique
     values present in the DataFrame — not from hardcoded constants.
 
-    :param df: Must contain ``binding_source``, ``expression_source``,
+    :param df: Must contain ``binding_source``, ``perturbation_source``,
         and the *y_column*.  Values should already be display-ready strings.
     :param y_column: Numeric column to plot on the y-axis.
     :param y_axis_title: Display label for the y-axis.
@@ -34,7 +37,7 @@ def create_distribution_plot(
     :returns: A styled Plotly :class:`Figure`.
 
     """
-    required = {y_column, "binding_source", "expression_source"}
+    required = {y_column, "binding_source", "perturbation_source"}
     missing = required - set(df.columns)
     if missing:
         raise ValueError(f"DataFrame missing required columns: {missing}")
@@ -44,11 +47,11 @@ def create_distribution_plot(
 
     # Derive levels from the data itself — no enum dependency.
     binding_levels = sorted(df["binding_source"].unique().tolist())
-    perturbation_levels = sorted(df["expression_source"].unique().tolist())
+    perturbation_levels = sorted(df["perturbation_source"].unique().tolist())
 
     category_orders = {
         "binding_source": binding_levels,
-        "expression_source": perturbation_levels,
+        "perturbation_source": perturbation_levels,
     }
 
     color_palette = px.colors.qualitative.Vivid
@@ -62,11 +65,18 @@ def create_distribution_plot(
         x="binding_source",
         y=y_column,
         color="binding_source",
-        facet_col="expression_source",
+        facet_col="perturbation_source",
         facet_col_spacing=0.04,
         points="outliers",
         category_orders=category_orders,
         color_discrete_map=color_discrete_map,
     )
 
-    return plot_formatter(fig, "Binding Data Source", y_axis_title, height=height)
+    return plot_formatter(
+        fig,
+        color_label,
+        y_axis_title,
+        height=height,
+        legend_title=color_label,
+        match_yaxes=match_yaxes,
+    )

@@ -136,14 +136,11 @@ def app_server(
 
     analysis_config: reactive.Value[dict[str, Any]] = reactive.value(
         {
-            "view": "table",
+            "view": "summary",
             "selected_db_name": "",
             "comparison_db_name": "",
             "comparison_mode": False,
-            "p_value": 0.05,
-            "log2fc_threshold": 1.0,
             "correlation_value_column": "effect_size",
-            "correlation_group_by": "regulator",
             "page": 1,
             "page_size": 25,
             "composite_method": "dto",
@@ -597,7 +594,7 @@ def app_server(
                 "selected_db_name": row_db_name,
                 "comparison_db_name": col_db_name,
                 "comparison_mode": True,
-                "view": "compare",
+                "view": "summary",
                 "page": 1,
             }
         )
