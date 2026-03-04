@@ -193,7 +193,7 @@ def app_server(
 
         for entry in selected:
             dataset_id = str(entry["id"])
-            db_name = str(entry.get("db_name") or entry.get("dbName"))
+            db_name = str(entry.get("db_name"))
             normalized = normalize_dataset_filters(filters.get(dataset_id, {}))
             if normalized["categorical"]:
                 categorical_payload[db_name] = normalized["categorical"]
@@ -248,21 +248,14 @@ def app_server(
 
             # Build a VirtualDB containing at least this dataset.
             selected = _selected_datasets()
-            selected_db_names = [
-                str(e.get("db_name") or e.get("dbName")) for e in selected
-            ]
-            ds_db_name = str(dataset.get("db_name") or dataset.get("dbName"))
+            selected_db_names = [str(e.get("db_name")) for e in selected]
+            ds_db_name = str(dataset.get("db_name"))
             all_db_names = sorted(set(selected_db_names + [ds_db_name]))
             vdb = get_or_create_vdb(all_db_names)
 
-            metadata_configs = (
-                dataset.get("metadata_configs") or dataset.get("metadataConfigs") or []
-            )
+            metadata_configs = dataset.get("metadata_configs") or []
             if metadata_configs:
-                meta_table = str(
-                    metadata_configs[0].get("dbName")
-                    or metadata_configs[0].get("db_name")
-                )
+                meta_table = str(metadata_configs[0].get("db_name"))
             else:
                 meta_table = f"{ds_db_name}_meta"
 
@@ -290,9 +283,7 @@ def app_server(
 
     def _handle_refresh_intersection() -> None:
         selected = _selected_datasets()
-        selected_db_names = [
-            str(entry.get("db_name") or entry.get("dbName")) for entry in selected
-        ]
+        selected_db_names = [str(entry.get("db_name")) for entry in selected]
 
         if not selected_db_names:
             intersection_cells.set([])
@@ -310,7 +301,7 @@ def app_server(
             column_counts: dict[str, int | None] = {}
             for entry in selected:
                 dataset_id = str(entry["id"])
-                db_name = str(entry.get("db_name") or entry.get("dbName"))
+                db_name = str(entry.get("db_name"))
                 dataset_type = str(entry.get("type", ""))
                 try:
                     # For binding datasets, count distinct samples.
@@ -335,12 +326,9 @@ def app_server(
 
                 next_entry = dict(entry)
                 next_entry["sample_count"] = sample_count
-                next_entry["sampleCount"] = sample_count
                 next_entry["sample_count_known"] = True
-                next_entry["sampleCountKnown"] = True
                 if column_count is not None:
                     next_entry["column_count"] = column_count
-                    next_entry["columnCount"] = column_count
                 updated_datasets.append(next_entry)
 
             payloads = _selected_filter_payloads()
@@ -360,7 +348,7 @@ def app_server(
 
             final_datasets = []
             for entry in updated_datasets:
-                db_name = str(entry.get("db_name") or entry.get("dbName"))
+                db_name = str(entry.get("db_name"))
                 if db_name not in tf_count_by_db_name:
                     final_datasets.append(entry)
                     continue
@@ -368,9 +356,7 @@ def app_server(
                 next_entry = dict(entry)
                 tf_count = int(tf_count_by_db_name[db_name])
                 next_entry["tf_count"] = tf_count
-                next_entry["tfCount"] = tf_count
                 next_entry["tf_count_known"] = True
-                next_entry["tfCountKnown"] = True
                 next_entry["gene_count"] = tf_count
                 final_datasets.append(next_entry)
 
@@ -565,18 +551,18 @@ def app_server(
         intersection_count = int(details.get("intersectionCount") or 0)
         row_type = str(row_dataset.get("type", "Expression"))
         col_type = str(col_dataset.get("type", "Expression"))
-        row_db_name = str(row_dataset.get("dbName", ""))
-        col_db_name = str(col_dataset.get("dbName", ""))
+        row_db_name = str(row_dataset.get("db_name", ""))
+        col_db_name = str(col_dataset.get("db_name", ""))
 
         payload: dict[str, Any] = {
             "rowDataset": {
                 "id": str(row_dataset.get("id", "")),
-                "dbName": row_db_name,
+                "db_name": row_db_name,
                 "type": row_type,
             },
             "colDataset": {
                 "id": str(col_dataset.get("id", "")),
-                "dbName": col_db_name,
+                "db_name": col_db_name,
                 "type": col_type,
             },
             "intersectionCount": intersection_count,

@@ -167,8 +167,8 @@ on_cell_click(payload) callback -> app_server
     |
     v
 intersection_detail.set({                            [app.py]
-    rowDataset: {id, dbName, type, name, tfCount},
-    colDataset: {id, dbName, type, name, tfCount},
+    rowDataset: {id, db_name, type, name, tf_count},
+    colDataset: {id, db_name, type, name, tf_count},
     intersectionCount: count
 })
     |

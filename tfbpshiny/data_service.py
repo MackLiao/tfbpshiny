@@ -67,7 +67,7 @@ def _infer_dataset_type(
         return "Binding"
     if _PERTURBATION_KEYWORDS.search(haystack):
         return "Perturbation"
-    return "Expression"
+    return "Unknown"
 
 
 def _dataset_group_and_badge(dataset_type: str) -> tuple[str, str]:
@@ -77,7 +77,7 @@ def _dataset_group_and_badge(dataset_type: str) -> tuple[str, str]:
         return ("perturbation", "PR")
     if dataset_type == "Comparative":
         return ("comparative", "CO")
-    return ("expression", "EX")
+    return ("unknown", "UK")
 
 
 def _title_case(raw: str) -> str:
@@ -124,13 +124,13 @@ def get_datasets(yaml_path: Path | str | None = None) -> list[dict[str, Any]]:
             meta_db_name = f"{db_name}_meta"
             metadata_configs = [
                 {
-                    "configName": f"{config_name}_meta",
-                    "dbName": meta_db_name,
-                    "sampleIdField": "sample_id",
-                    "sampleCount": 0,
-                    "sampleCountKnown": False,
-                    "columnCount": 0,
-                    "columnNames": [],
+                    "config_name": f"{config_name}_meta",
+                    "db_name": meta_db_name,
+                    "sample_id_field": "sample_id",
+                    "sample_count": 0,
+                    "sample_count_known": False,
+                    "column_count": 0,
+                    "column_names": [],
                 }
             ]
 
@@ -138,31 +138,20 @@ def get_datasets(yaml_path: Path | str | None = None) -> list[dict[str, Any]]:
                 {
                     "id": dataset_id,
                     "db_name": db_name,
-                    "dbName": db_name,
                     "repo_id": repo_id,
-                    "repoId": repo_id,
                     "config_name": config_name,
-                    "configName": config_name,
                     "name": display_name,
                     "type": dataset_type,
                     "group": group,
                     "type_badge": type_badge,
-                    "typeBadge": type_badge,
                     "sample_count": 0,
-                    "sampleCount": 0,
                     "sample_count_known": False,
-                    "sampleCountKnown": False,
                     "column_count": 0,
-                    "columnCount": 0,
                     "column_names": [],
-                    "columnNames": [],
                     "gene_count": 0,
                     "tf_count": 0,
-                    "tfCount": 0,
                     "tf_count_known": False,
-                    "tfCountKnown": False,
                     "metadata_configs": metadata_configs,
-                    "metadataConfigs": metadata_configs,
                     "metadata": {
                         "source": repo_id,
                         "meta_table": meta_db_name,
@@ -789,6 +778,12 @@ def get_median_correlation_matrix(
                 else:
                     # Use mean: deterministic, appropriate for continuous values
                     tf_target_map[tf][tgt] = sum(vals) / len(vals)
+
+        if not tf_target_map:
+            logger.debug(
+                "Dataset %s has no valid TF-target data after null filtering", db_name
+            )
+            continue
 
         dataset_data[db_name] = tf_target_map
         valid_db_names.append(db_name)

@@ -242,11 +242,9 @@ def render_dataset_config_modal(
     badge_text, badge_class = _dataset_type_badge(
         str(dataset.get("type", "Expression"))
     )
-    sample_count = int(dataset.get("sample_count") or dataset.get("sampleCount") or 0)
-    sample_count_known = bool(
-        dataset.get("sample_count_known") or dataset.get("sampleCountKnown")
-    )
-    column_count = int(dataset.get("column_count") or dataset.get("columnCount") or 0)
+    sample_count = int(dataset.get("sample_count") or 0)
+    sample_count_known = bool(dataset.get("sample_count_known"))
+    column_count = int(dataset.get("column_count") or 0)
 
     option_sections: list[ui.Tag] = []
 
@@ -472,8 +470,8 @@ def render_intersection_detail_modal(details: dict[str, Any]) -> ui.Tag:
     col_dataset = details["colDataset"]
     count = int(details.get("intersectionCount") or 0)
 
-    row_tf_count = int(row_dataset.get("tfCount") or row_dataset.get("tf_count") or 0)
-    col_tf_count = int(col_dataset.get("tfCount") or col_dataset.get("tf_count") or 0)
+    row_tf_count = int(row_dataset.get("tf_count") or 0)
+    col_tf_count = int(col_dataset.get("tf_count") or 0)
 
     row_pct = "N/A" if row_tf_count <= 0 else f"{(count / row_tf_count) * 100:.1f}%"
     col_pct = "N/A" if col_tf_count <= 0 else f"{(count / col_tf_count) * 100:.1f}%"
