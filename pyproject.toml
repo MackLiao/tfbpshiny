@@ -1,7 +1,7 @@
 [tool.poetry]
 name = "tfbpshiny"
 version = "0.0.0"
-description = "A shiny app for django.tfbindingandperturbation.com"
+description = "A shiny app which provides a dashboard to https://huggingface.co/collections/BrentLab/yeastresources"
 authors = ["chasem <chasem@wustl.edu>"]
 license = "GPL-3.0"
 readme = "README.md"
@@ -11,8 +11,6 @@ python = "^3.11"
 tfbpapi = {git = "https://github.com/BrentLab/tfbpapi.git", rev = "dev"}
 shiny = "^1.4.0"
 shinywidgets = "^0.5.2"
-upsetjs-jupyter-widget = "^1.9.0"
-scikit-learn = "^1.6.1"
 plotly = "^6.0.1"
 python-dotenv = "^1.1.0"
 faicons = "^0.2.2"

@@ -20,95 +20,56 @@ for developer reference during further development.
 
 ## High-Level Architecture
 
-The app has two major phases controlled by `active_module`:
+The application is structured around modules, each of which have a
+sidebar and a workspace component.
 
-```
-              active_module
-                   |
-        +----------+----------+
-        |                     |
-   "selection"         "binding" / "perturbation" / "composite"
-        |                     |
-   Selection Phase       Analysis Phase
-   (sidebar + matrix)   (sidebar + workspace)
-```
-
-**Selection Phase** -- user picks datasets, applies per-dataset filters,
-computes an intersection matrix, then clicks a cell to navigate into analysis.
-
-**Analysis Phase** -- user views filtered data tables, correlation plots,
-summary stats, or pairwise comparisons for the datasets selected earlier.
-
----
-
-## Shared Reactive State
-
-All top-level reactive values are defined in `app_server` (`app.py:108-148`)
-and passed by reference to child modules. Any module can read or write them.
 
 ### Navigation & Module State
 
-| Reactive Value | Type | Purpose |
-|---|---|---|
-| `active_module` | `str` | Current view: `"selection"`, `"binding"`, `"perturbation"`, `"composite"` |
+- **[active_module](../tfbpshiny/app.py#active-module)** (
+    [`ActiveModule`](../tfbpshiny/enums.py#active-module-enum)) — the currently
+  selected module; controls which sidebar and workspace are rendered.s
 
 ### Dataset Management
 
-| Reactive Value | Type | Purpose |
-|---|---|---|
-| `datasets` | `list[dict]` | All available datasets with `selected`, `tf_count`, metadata |
-| `datasets_loading` | `bool` | Initial dataset fetch loading state |
-| `datasets_error` | `str \| None` | Error from dataset fetch |
+- **`datasets`** (`list[dict]`) — all available datasets with `selected`, `tf_count`, metadata
+- **`datasets_loading`** (`bool`) — initial dataset fetch loading state
+- **`datasets_error`** (`str | None`) — error from dataset fetch
 
 ### Selection & Filtering
 
-| Reactive Value | Type | Purpose |
-|---|---|---|
-| `logic_mode` | `str` | `"intersect"` (AND) or `"union"` (OR) |
-| `dataset_filters` | `dict` | `{dataset_id: {categorical: {...}, numeric: {...}}}` |
-| `filter_options_by_dataset` | `dict` | Cached metadata filter choices per dataset |
-| `filter_options_loading_by_dataset` | `dict` | Loading state per dataset |
+- **`logic_mode`** (`str`) — `"intersect"` (AND) or `"union"` (OR)
+- **`dataset_filters`** (`dict`) — `{dataset_id: {categorical: {...}, numeric: {...}}}`
+- **`filter_options_by_dataset`** (`dict`) — cached metadata filter choices per dataset
+- **`filter_options_loading_by_dataset`** (`dict`) — loading state per dataset
 
 ### Intersection
 
-| Reactive Value | Type | Purpose |
-|---|---|---|
-| `intersection_cells` | `list` | Matrix of pairwise intersection counts |
-| `has_loaded_intersection` | `bool` | Whether intersection has been computed at least once |
-| `intersection_loading` | `bool` | Active computation loading state |
-| `intersection_error` | `str \| None` | Error from intersection computation |
-| `last_selection_signature` | `str` | JSON hash for change detection |
+- **`intersection_cells`** (`list`) — matrix of pairwise intersection counts
+- **`has_loaded_intersection`** (`bool`) — whether intersection has been computed at least once
+- **`intersection_loading`** (`bool`) — active computation loading state
+- **`intersection_error`** (`str | None`) — error from intersection computation
+- **`last_selection_signature`** (`str`) — JSON hash for change detection
 
 ### Modal State
 
-| Reactive Value | Type | Purpose |
-|---|---|---|
-| `active_config_dataset_id` | `str \| None` | Which dataset's filter config modal is open |
-| `intersection_detail` | `dict \| None` | Payload for intersection detail modal |
-| `latest_navigation_intent` | `dict \| None` | Navigation payload from detail modal |
+- **`active_config_dataset_id`** (`str | None`) — which dataset's filter config modal is open
+- **`intersection_detail`** (`dict | None`) — payload for intersection detail modal
+- **`latest_navigation_intent`** (`dict | None`) — navigation payload from detail modal
 
 ### Analysis Configuration
 
-| Reactive Value | Type | Purpose |
-|---|---|---|
-| `analysis_config` | `dict` | Controls analysis views (see below) |
-
-`analysis_config` structure:
-
-```python
-{
-    "view": "table" | "correlation" | "summary" | "compare",
-    "selected_db_name": str,         # Dataset A
-    "comparison_db_name": str,       # Dataset B (pairwise)
-    "comparison_mode": bool,
-    "p_value": float,
-    "log2fc_threshold": float,
-    "correlation_value_column": str,
-    "correlation_group_by": str,
-    "page": int,
-    "page_size": int,
-}
-```
+- **`analysis_config`** (`dict`) — controls analysis views; contains:
+  - **`view`** (`"table" | "correlation" | "summary" | "compare"`) — active analysis view
+  - **`selected_db_name`** (`str`) — Dataset A
+  - **`comparison_db_name`** (`str`) — Dataset B (pairwise)
+  - **`comparison_mode`** (`bool`) — whether pairwise comparison is active
+  - **`p_value`** (`float`) — p-value threshold for filtering
+  - **`log2fc_threshold`** (`float`) — log2 fold-change threshold
+  - **`correlation_value_column`** (`str`) — column used for correlation values
+  - **`correlation_group_by`** (`str`) — grouping column for correlation view
+  - **`page`** (`int`) — current page index
+  - **`page_size`** (`int`) — number of rows per page
 
 ---
 

@@ -11,6 +11,7 @@ from typing import Any, Literal, cast
 
 from dotenv import load_dotenv
 from shiny import App, reactive, render, ui
+from tfbpapi import VirtualDB
 
 from configure_logger import configure_logger
 from tfbpshiny.data_service import (
@@ -95,6 +96,35 @@ app_ui = ui.page_fillable(
 )
 
 # ---------------------------------------------------------------------------
+# Initialize VirtualDB
+# ---------------------------------------------------------------------------
+
+# note that for testing purposes in development, or quick updates in production,
+# you can use the .env to direct tfbpshiny to an alternate YAML config
+# with env var `VDB_CONFIG_PATH=/path/to/alternate.yaml`
+_default_config = Path(__file__).parent / "brentlab_yeast_collection.yaml"
+config = os.getenv("VDB_CONFIG_PATH", str(_default_config))
+logger.info("VDB config path: %s", config)
+vdb = VirtualDB(config)
+# this will create the default views
+logger.info("VDB initialized with tables: %s", vdb.tables())
+
+# datasets has the structure {data_type:
+#                               {
+#                                 assay1: [db_name1, db_name2, ...],
+#                                 assay2: [db_name3, ...]
+#                               }
+#                             }
+# eg {'Binding': {"Calling Cards": ['2026 Calling cards'],
+#                 "ChIP-chip": ['2004 Harbison']},
+#     'Perturbation': {"Overexpression": ['2020 Hackett'], "TFKO": ['2014 Kemmeren']}}
+datasets: dict[str, dict[str, list]] = {}
+for db_name in vdb.get_datasets():
+    datatype = vdb.get_tags(db_name).get("data_type", "Unknown")
+    assay = vdb.get_tags(db_name).get("assay", "Unknown")
+    datasets.setdefault(datatype, {}).setdefault(assay, []).append(db_name)
+
+# ---------------------------------------------------------------------------
 # Server
 # ---------------------------------------------------------------------------
 
@@ -107,33 +137,87 @@ def app_server(
     """Create shared reactive state and call all module servers."""
 
     # -- Shared reactive values --
+    # values: "selection", "binding", "perturbation", "composite"
+    # read by: nav_server, sidebar_region, workspace_region
+    # updated in: nav_server (on nav click), _emit_navigation_intent_from_modal
     active_module: reactive.Value[str] = reactive.value("selection")
 
+    # values: list of dataset dicts with id, db_name, type, selected, tf_count, sample_count, etc.
+    # read by: selection_sidebar_server, selection_matrix_server, analysis_sidebar_server, analysis_workspace_server
+    # updated in: initialization, _set_dataset_selected, _handle_refresh_intersection
     datasets: reactive.Value[list[dict[str, Any]]] = reactive.value([])
+    # values: bool
+    # read by: selection_sidebar_server
+    # updated in: initialization
     datasets_loading: reactive.Value[bool] = reactive.value(True)
-    datasets_error: reactive.Value[str | None] = reactive.value(None)
 
+    # values: "intersect", "union"
+    # read by: selection_sidebar_server, selection_matrix_server
+    # updated in: selection_sidebar_server (logic mode toggle)
     logic_mode: reactive.Value[str] = reactive.value("intersect")
+    # values: {dataset_id: {categorical: {field: [str]}, numeric: {field: {min, max}}}}
+    # read by: selection_sidebar_server, modal_layer, _selection_signature
+    # updated in: _apply_config_modal_filters, _handle_clear_all_filters
     dataset_filters: reactive.Value[dict[str, Any]] = reactive.value({})
+    # values: {dataset_id: list of filter option dicts}
+    # read by: modal_layer, _ensure_dataset_filter_options
+    # updated in: _ensure_dataset_filter_options
     filter_options_by_dataset: reactive.Value[dict[str, list[dict[str, Any]]]] = (
         reactive.value({})
     )
+    # values: {dataset_id: bool}
+    # read by: modal_layer
+    # updated in: _ensure_dataset_filter_options
     filter_options_loading_by_dataset: reactive.Value[dict[str, bool]] = reactive.value(
         {}
     )
 
+    # values: list of pairwise cell dicts {row, col, count}
+    # read by: selection_matrix_server
+    # updated in: _handle_refresh_intersection, _reset_intersection_on_signature_change
     intersection_cells: reactive.Value[list[dict[str, Any]]] = reactive.value([])
+    # values: bool
+    # read by: selection_matrix_server
+    # updated in: _handle_refresh_intersection, _reset_intersection_on_signature_change
     has_loaded_intersection: reactive.Value[bool] = reactive.value(False)
+    # values: bool
+    # read by: selection_sidebar_server, selection_matrix_server
+    # updated in: _handle_refresh_intersection
     intersection_loading: reactive.Value[bool] = reactive.value(False)
+    # values: error string, or None
+    # read by: selection_matrix_server
+    # updated in: _handle_refresh_intersection, _reset_intersection_on_signature_change
     intersection_error: reactive.Value[str | None] = reactive.value(None)
+    # values: JSON string (hash of selected ids + filters), or None
+    # read by: _reset_intersection_on_signature_change
+    # updated in: _reset_intersection_on_signature_change
     last_selection_signature: reactive.Value[str | None] = reactive.value(None)
 
+    # values: dataset_id string when config modal is open, else None
+    # read by: modal_layer, _sync_modal_include_toggle, _apply_config_modal_filters, _clear_config_modal_draft
+    # updated in: _handle_open_config, _close_config_modal_from_header, _close_config_modal_from_cancel, _apply_config_modal_filters
     active_config_dataset_id: reactive.Value[str | None] = reactive.value(None)
+    # values: intersection cell payload {rowDataset, colDataset, intersectionCount}, or None
+    # read by: modal_layer, _emit_navigation_intent_from_modal
+    # updated in: _handle_matrix_cell_click, _close_intersection_modal_from_header, _close_intersection_modal_from_footer, _emit_navigation_intent_from_modal
     intersection_detail: reactive.Value[dict[str, Any] | None] = reactive.value(None)
+    # values: navigation payload {rowDataset, colDataset, intersectionCount}, or None
+    # read by: (currently unused downstream)
+    # updated in: _emit_navigation_intent_from_modal
     latest_navigation_intent: reactive.Value[dict[str, Any] | None] = reactive.value(
         None
     )
 
+    # values: dict controlling analysis views; keys:
+    #   view: "summary", "table", "correlation", "compare"
+    #   selected_db_name, comparison_db_name: string (db names for dataset A/B)
+    #   comparison_mode: bool
+    #   correlation_value_column: string
+    #   page: integer, page_size: integer
+    #   composite_method: string, composite_filter_threshold: float, composite_filter_operator: string
+    #   composite_binding_datasets, composite_perturbation_datasets: list of db name strings
+    # read by: analysis_sidebar_server, analysis_workspace_server
+    # updated in: analysis_sidebar_server (control inputs), _emit_navigation_intent_from_modal
     analysis_config: reactive.Value[dict[str, Any]] = reactive.value(
         {
             "view": "summary",
@@ -151,23 +235,40 @@ def app_server(
         }
     )
 
-    # -- Initialization --
-    try:
-        datasets.set(get_datasets())
-        datasets_error.set(None)
-    except Exception as error:
-        datasets.set([])
-        datasets_error.set(str(error))
-    finally:
-        datasets_loading.set(False)
+    # # -- Initialization --
+    # try:
+    #     datasets.set(get_datasets())
+    #     datasets_error.set(None)
+    # except Exception as error:
+    #     datasets.set([])
+    #     datasets_error.set(str(error))
+    # finally:
+    #     datasets_loading.set(False)
 
     # -- Internal helpers --
     def _dataset_by_id(dataset_id: str) -> dict[str, Any] | None:
+        """
+        Look up a dataset by its string ID from shared reactive state.
+
+        :param dataset_id: the dataset's ``id`` field as a string
+        :returns: matching dataset dict, or ``None`` if not found
+
+        """
         return next(
             (entry for entry in datasets() if str(entry["id"]) == dataset_id), None
         )
 
     def _set_dataset_selected(dataset_id: str, selected: bool) -> None:
+        """
+        Toggle the ``selected`` flag on a single dataset and notify dependents.
+
+        Mutates the dataset entry in-place then calls ``datasets.set()`` only
+        when the flag actually changes, avoiding spurious reactive invalidations.
+
+        :param dataset_id: the dataset's ``id`` field as a string
+        :param selected: desired selection state
+
+        """
         current = datasets()
         changed = False
         for entry in current:
@@ -179,12 +280,31 @@ def app_server(
         if changed:
             datasets.set(list(current))
 
+    # called in: _selected_filter_payloads, _selection_signature, _ensure_dataset_filter_options, _handle_refresh_intersection
     @reactive.calc
     def _selected_datasets() -> list[dict[str, Any]]:
+        """
+        Subset of ``datasets`` where ``selected`` is truthy.
+
+        :returns: list of selected dataset dicts
+
+        """
         return [entry for entry in datasets() if entry.get("selected")]
 
+    # called in: _selection_signature, _handle_refresh_intersection
     @reactive.calc
     def _selected_filter_payloads() -> dict[str, dict[str, Any]]:
+        """
+        Build normalized filter payloads for all selected datasets.
+
+        Reads ``dataset_filters`` and normalizes each entry into separate
+        categorical and numeric sub-dicts keyed by ``db_name``, ready for the
+        backend intersection API.
+
+        :returns: dict with ``"categorical"`` and ``"numeric"`` keys, each
+            mapping ``db_name`` to its filter values
+
+        """
         selected = _selected_datasets()
         filters = dataset_filters()
 
@@ -205,8 +325,19 @@ def app_server(
             "numeric": numeric_payload,
         }
 
+    # called in: _reset_intersection_on_signature_change
     @reactive.calc
     def _selection_signature() -> str:
+        """
+        Produce a stable JSON hash of the current selection and filter state.
+
+        Used by ``_reset_intersection_on_signature_change`` to detect when the
+        selection or filters have changed and the intersection matrix should be
+        cleared.
+
+        :returns: sorted JSON string encoding selected dataset IDs and active filters
+
+        """
         selected_ids = [str(entry["id"]) for entry in _selected_datasets()]
         payloads = _selected_filter_payloads()
         return json.dumps(
@@ -218,9 +349,11 @@ def app_server(
             sort_keys=True,
         )
 
-    # Matrix reset behavior parity when selection/filter signature changes.
+    # triggered by: _selection_signature change
     @reactive.effect
     def _reset_intersection_on_signature_change() -> None:
+        """Clear intersection state whenever the selection or filter signature
+        changes."""
         signature = _selection_signature()
         previous_signature = last_selection_signature()
         if previous_signature == signature:
@@ -232,6 +365,16 @@ def app_server(
         has_loaded_intersection.set(False)
 
     def _ensure_dataset_filter_options(dataset_id: str) -> None:
+        """
+        Fetch and cache filter options for a dataset if not already loaded.
+
+        No-ops if the dataset is already present in ``filter_options_by_dataset``.
+        Sets ``filter_options_loading_by_dataset`` around the fetch and falls
+        back to an empty list on error.
+
+        :param dataset_id: the dataset's ``id`` field as a string
+
+        """
         cache = filter_options_by_dataset()
         if dataset_id in cache:
             return
@@ -275,13 +418,30 @@ def app_server(
             filter_options_loading_by_dataset.set(next_loading)
 
     def _handle_open_config(dataset_id: str) -> None:
+        """
+        Open the filter config modal for a dataset and ensure its options are loaded.
+
+        :param dataset_id: the dataset's ``id`` field as a string
+
+        """
         active_config_dataset_id.set(dataset_id)
         _ensure_dataset_filter_options(dataset_id)
 
     def _handle_clear_all_filters() -> None:
+        """Clear all active filters across all datasets."""
         dataset_filters.set({})
 
     def _handle_refresh_intersection() -> None:
+        """
+        Query the backend for intersection counts and update shared reactive state.
+
+        Creates or reuses a VirtualDB from the selected datasets, fetches
+        sample/column counts per dataset, queries pairwise intersection cells,
+        and stamps ``tf_count`` back onto each dataset entry. Updates
+        ``intersection_cells``, ``has_loaded_intersection``, and ``datasets``.
+        Sets ``intersection_error`` on failure.
+
+        """
         selected = _selected_datasets()
         selected_db_names = [str(entry.get("db_name")) for entry in selected]
 
@@ -371,16 +531,25 @@ def app_server(
             intersection_loading.set(False)
 
     def _handle_matrix_cell_click(payload: dict[str, Any]) -> None:
+        """
+        Store the clicked intersection cell payload to open the detail modal.
+
+        :param payload: dict with ``rowDataset``, ``colDataset``, and ``intersectionCount``
+
+        """
         intersection_detail.set(payload)
 
     @render.ui
     def sidebar_region() -> ui.Tag:
+        """Render the selection or analysis sidebar depending on the active module."""
         if active_module() == "selection":
             return selection_sidebar_ui("sel_sidebar")
         return analysis_sidebar_ui("ana_sidebar")
 
     @render.ui
     def workspace_region() -> ui.Tag:
+        """Render the selection matrix or analysis workspace depending on the active
+        module."""
         if active_module() == "selection":
             return selection_matrix_ui("sel_matrix")
         return analysis_workspace_ui("ana_workspace")
@@ -388,6 +557,12 @@ def app_server(
     # -- Modal rendering --
     @render.ui
     def modal_layer() -> ui.Tag:
+        """
+        Render the active modal overlay, or an empty span when no modal is open.
+
+        Priority: dataset config modal > intersection detail modal > nothing.
+
+        """
         active_dataset_id = active_config_dataset_id()
         if active_dataset_id:
             dataset = _dataset_by_id(active_dataset_id)
@@ -410,8 +585,11 @@ def app_server(
         return ui.span()
 
     # -- Dataset config modal interactions --
+    # triggered by: input.modal_include_dataset change
     @reactive.effect
     def _sync_modal_include_toggle() -> None:
+        """Sync the dataset selection state when the include toggle in the config modal
+        changes."""
         dataset_id = active_config_dataset_id()
         if not dataset_id:
             return
@@ -423,19 +601,25 @@ def app_server(
 
         _set_dataset_selected(dataset_id, include)
 
+    # triggered by: input.modal_close_config click
     @reactive.effect
     @reactive.event(input.modal_close_config)
     def _close_config_modal_from_header() -> None:
+        """Close the dataset config modal when the header close button is clicked."""
         active_config_dataset_id.set(None)
 
+    # triggered by: input.modal_cancel_filters click
     @reactive.effect
     @reactive.event(input.modal_cancel_filters)
     def _close_config_modal_from_cancel() -> None:
+        """Close the dataset config modal when the cancel button is clicked."""
         active_config_dataset_id.set(None)
 
+    # triggered by: input.modal_clear_filters click
     @reactive.effect
     @reactive.event(input.modal_clear_filters)
     def _clear_config_modal_draft() -> None:
+        """Reset all filter inputs in the config modal to their empty state."""
         dataset_id = active_config_dataset_id()
         if not dataset_id:
             return
@@ -457,9 +641,12 @@ def app_server(
                     selected="symbol",
                 )
 
+    # triggered by: input.modal_apply_filters click
     @reactive.effect
     @reactive.event(input.modal_apply_filters)
     def _apply_config_modal_filters() -> None:
+        """Read filter inputs from the config modal and write them to
+        ``dataset_filters``."""
         dataset_id = active_config_dataset_id()
         if not dataset_id:
             return
@@ -529,19 +716,35 @@ def app_server(
         active_config_dataset_id.set(None)
 
     # -- Intersection detail modal interactions --
+    # triggered by: input.modal_close_intersection click
     @reactive.effect
     @reactive.event(input.modal_close_intersection)
     def _close_intersection_modal_from_header() -> None:
+        """Close the intersection detail modal when the header close button is
+        clicked."""
         intersection_detail.set(None)
 
+    # triggered by: input.modal_close_intersection_secondary click
     @reactive.effect
     @reactive.event(input.modal_close_intersection_secondary)
     def _close_intersection_modal_from_footer() -> None:
+        """Close the intersection detail modal when the footer close button is
+        clicked."""
         intersection_detail.set(None)
 
+    # triggered by: input.modal_open_analysis click
     @reactive.effect
     @reactive.event(input.modal_open_analysis)
     def _emit_navigation_intent_from_modal() -> None:
+        """
+        Navigate to the appropriate analysis module from the intersection detail modal.
+
+        Reads the current ``intersection_detail`` payload, resolves the target
+        analysis module from the dataset types, updates ``analysis_config`` with
+        the selected dataset pair in comparison mode, and sets ``active_module``.
+        Also records the intent in ``latest_navigation_intent`` for debugging.
+
+        """
         details = intersection_detail()
         if not details:
             return

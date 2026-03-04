@@ -19,7 +19,7 @@ from pathlib import Path
 from typing import Any
 
 import yaml  # type: ignore[import-untyped]
-from tfbpapi import DatasetConfig, MetadataConfig, VirtualDB
+from tfbpapi import VirtualDB
 
 logger = logging.getLogger("shiny")
 
@@ -29,45 +29,11 @@ logger = logging.getLogger("shiny")
 
 _YAML_PATH = Path(__file__).parent / "brentlab_yeast_collection.yaml"
 
-_SAFE_IDENTIFIER = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
-
-
-def _validate_identifier(name: str) -> str:
-    """Raise ValueError if *name* is not a safe SQL identifier."""
-    if not _SAFE_IDENTIFIER.fullmatch(name):
-        raise ValueError(f"Unsafe SQL identifier: {name!r}")
-    return name
-
-
-# ---------------------------------------------------------------------------
-# Dataset type inference
-# ---------------------------------------------------------------------------
-
-_BINDING_KEYWORDS = re.compile(
-    r"callingcards|harbison|rossi|m2025|chec|chipexo|chip",
-    re.IGNORECASE,
-)
-_PERTURBATION_KEYWORDS = re.compile(
-    r"hughes|kemmeren|hackett|overexpression|knockout|perturbation|tfko|zev|rnaseq",
-    re.IGNORECASE,
-)
-
-
-def _infer_dataset_type(
-    repo_id: str,
-    config_name: str,
-    ds_cfg: DatasetConfig,
-) -> str:
-    """Classify a dataset as Binding, Perturbation, or Comparative."""
-    if getattr(ds_cfg, "links", None):
-        return "Comparative"
-
-    haystack = f"{repo_id} {config_name}"
-    if _BINDING_KEYWORDS.search(haystack):
-        return "Binding"
-    if _PERTURBATION_KEYWORDS.search(haystack):
-        return "Perturbation"
-    return "Unknown"
+_DATASET_TYPE_META: dict[str, tuple[str, str]] = {
+    "Binding": ("binding", "BD"),
+    "Perturbation": ("perturbation", "PR"),
+    "Comparative": ("comparative", "CO"),
+}
 
 
 def _dataset_group_and_badge(dataset_type: str) -> tuple[str, str]:
@@ -77,7 +43,7 @@ def _dataset_group_and_badge(dataset_type: str) -> tuple[str, str]:
         return ("perturbation", "PR")
     if dataset_type == "Comparative":
         return ("comparative", "CO")
-    return ("unknown", "UK")
+    raise ValueError(f"Unknown dataset type: {dataset_type}")
 
 
 def _title_case(raw: str) -> str:
@@ -98,7 +64,6 @@ def get_datasets(yaml_path: Path | str | None = None) -> list[dict[str, Any]]:
 
     """
     path = Path(yaml_path) if yaml_path else _YAML_PATH
-    config = MetadataConfig.from_yaml(path)
 
     enriched: list[dict[str, Any]] = []
     for repo_id, repo_cfg in config.repositories.items():
@@ -118,7 +83,16 @@ def get_datasets(yaml_path: Path | str | None = None) -> list[dict[str, Any]]:
             if dataset_type == "Comparative":
                 continue
 
-            group, type_badge = _dataset_group_and_badge(dataset_type)
+            try:
+                group, type_badge = _DATASET_TYPE_META[dataset_type]
+            except KeyError:
+                logger.error(
+                    "Unknown dataset type '%s' for %s/%s, defaulting to 'binding'",
+                    dataset_type,
+                    repo_id,
+                    config_name,
+                )
+                group, type_badge = ("unknown", "UK")
             dataset_id = f"{repo_id}::{config_name}"
 
             meta_db_name = f"{db_name}_meta"

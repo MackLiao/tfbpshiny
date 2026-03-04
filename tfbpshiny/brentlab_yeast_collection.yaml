@@ -9,25 +9,14 @@ repositories:
     temperature_celsius:
       path: experimental_conditions.temperature_celsius
     dataset:
-      # binding
-      annotated_features:
-        db_name: cc_replicate_db
-        display_name: "2026 Calling Cards (replicate)"
+      tags:
+        data_type: Binding
+        assay: CallingCards
+        display_name: "2026 Calling Cards"
+      2026_analysis_set:
+        db_name: callingcards
         sample_id:
           field: id
-      annotated_features_combined:
-        db_name: cc_combined_db
-        display_name: "2026 Calling Cards (combined)"
-        sample_id:
-          field: genome_map_id_set
-      annotated_features_orig_reprocess:
-        db_name: cc_replicate_repro
-        display_name: "2026 Calling Cards (reprocessed)"
-        sample_id:
-          field: id
-        carbon_source:
-          field: condition
-          path: media.carbon_source.compound
 
   BrentLab/harbison_2004:
     dataset:
