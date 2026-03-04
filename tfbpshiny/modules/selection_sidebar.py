@@ -58,9 +58,9 @@ def selection_sidebar_server(
         filter_counts = _active_filter_counts()
 
         selected_tf_total = sum(
-            int(dataset.get("tf_count") or dataset.get("tfCount") or 0)
+            int(dataset.get("tf_count") or 0)
             for dataset in selected
-            if dataset.get("tf_count_known") or dataset.get("tfCountKnown")
+            if dataset.get("tf_count_known")
         )
         selected_filters_total = sum(
             filter_counts.get(str(dataset["id"]), 0) for dataset in selected
@@ -162,18 +162,12 @@ def selection_sidebar_server(
             dataset_id = str(dataset["id"])
             toggle_id = _dataset_input_id("ds_toggle", dataset_id)
             configure_id = _dataset_input_id("configure", dataset_id)
-            badge = str(dataset.get("type_badge") or dataset.get("typeBadge") or "EX")
+            badge = str(dataset.get("type_badge") or "EX")
             badge_cls = f"badge badge-{badge.lower()}"
 
-            sample_count = int(
-                dataset.get("sample_count") or dataset.get("sampleCount") or 0
-            )
-            column_count = int(
-                dataset.get("column_count") or dataset.get("columnCount") or 0
-            )
-            sample_known = bool(
-                dataset.get("sample_count_known") or dataset.get("sampleCountKnown")
-            )
+            sample_count = int(dataset.get("sample_count") or 0)
+            column_count = int(dataset.get("column_count") or 0)
+            sample_known = bool(dataset.get("sample_count_known"))
             summary_text = (
                 f"{sample_count:,} rows · {column_count:,} cols"
                 if sample_known

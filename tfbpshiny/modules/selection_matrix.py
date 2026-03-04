@@ -87,11 +87,11 @@ def selection_matrix_server(
 
         values: list[int] = []
         for i, row_dataset in enumerate(active):
-            row_db = str(row_dataset.get("db_name") or row_dataset.get("dbName"))
+            row_db = str(row_dataset.get("db_name"))
             for j, col_dataset in enumerate(active):
                 if j <= i:
                     continue
-                col_db = str(col_dataset.get("db_name") or col_dataset.get("dbName"))
+                col_db = str(col_dataset.get("db_name"))
                 value = cell_map.get(_cell_key(row_db, col_db))
                 if isinstance(value, int):
                     values.append(value)
@@ -106,14 +106,14 @@ def selection_matrix_server(
 
         for row_index, row_dataset in enumerate(active):
             row_id = str(row_dataset.get("id"))
-            row_db = str(row_dataset.get("db_name") or row_dataset.get("dbName"))
+            row_db = str(row_dataset.get("db_name"))
 
             for col_index, col_dataset in enumerate(active):
                 if col_index <= row_index:
                     continue
 
                 col_id = str(col_dataset.get("id"))
-                col_db = str(col_dataset.get("db_name") or col_dataset.get("dbName"))
+                col_db = str(col_dataset.get("db_name"))
                 value = cell_map.get(_cell_key(row_db, col_db))
                 if value is None:
                     continue
@@ -133,35 +133,17 @@ def selection_matrix_server(
                         payload = {
                             "rowDataset": {
                                 "id": row_id,
-                                "dbName": row_db,
+                                "db_name": row_db,
                                 "type": row_dataset.get("type", "Expression"),
                                 "name": row_dataset.get("name", row_db),
-                                "tfCount": int(
-                                    row_dataset.get("tf_count")
-                                    or row_dataset.get("tfCount")
-                                    or 0
-                                ),
-                                "tf_count": int(
-                                    row_dataset.get("tf_count")
-                                    or row_dataset.get("tfCount")
-                                    or 0
-                                ),
+                                "tf_count": int(row_dataset.get("tf_count") or 0),
                             },
                             "colDataset": {
                                 "id": col_id,
-                                "dbName": col_db,
+                                "db_name": col_db,
                                 "type": col_dataset.get("type", "Expression"),
                                 "name": col_dataset.get("name", col_db),
-                                "tfCount": int(
-                                    col_dataset.get("tf_count")
-                                    or col_dataset.get("tfCount")
-                                    or 0
-                                ),
-                                "tf_count": int(
-                                    col_dataset.get("tf_count")
-                                    or col_dataset.get("tfCount")
-                                    or 0
-                                ),
+                                "tf_count": int(col_dataset.get("tf_count") or 0),
                             },
                             "intersectionCount": int(value),
                         }
@@ -221,7 +203,7 @@ def selection_matrix_server(
         ]
 
         for dataset in active:
-            db_name = str(dataset.get("db_name") or dataset.get("dbName"))
+            db_name = str(dataset.get("db_name"))
             tf_count = int(diagonal_tf_map.get(db_name, 0))
             header_cells.append(
                 ui.tags.th(
@@ -237,7 +219,7 @@ def selection_matrix_server(
         body_rows: list[ui.Tag] = []
         for row_index, row_dataset in enumerate(active):
             row_name = str(row_dataset.get("name", "Dataset"))
-            row_db = str(row_dataset.get("db_name") or row_dataset.get("dbName"))
+            row_db = str(row_dataset.get("db_name"))
             row_id = str(row_dataset.get("id"))
 
             cells: list[ui.Tag] = [
@@ -248,7 +230,7 @@ def selection_matrix_server(
             ]
 
             for col_index, col_dataset in enumerate(active):
-                col_db = str(col_dataset.get("db_name") or col_dataset.get("dbName"))
+                col_db = str(col_dataset.get("db_name"))
                 col_id = str(col_dataset.get("id"))
 
                 if col_index < row_index:

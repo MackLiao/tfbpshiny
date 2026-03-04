@@ -83,9 +83,7 @@ def analysis_workspace_server(
     def _resolve_dataset_pair() -> tuple[str, str, bool]:
         config = analysis_config()
         relevant = _relevant_datasets()
-        db_names = [
-            str(dataset.get("db_name") or dataset.get("dbName")) for dataset in relevant
-        ]
+        db_names = [str(dataset.get("db_name")) for dataset in relevant]
 
         selected_db = str(config.get("selected_db_name", ""))
         if selected_db not in db_names:
@@ -127,9 +125,7 @@ def analysis_workspace_server(
             return None
 
         relevant = _relevant_datasets()
-        db_names = [
-            str(dataset.get("db_name") or dataset.get("dbName")) for dataset in relevant
-        ]
+        db_names = [str(dataset.get("db_name")) for dataset in relevant]
 
         if len(db_names) < 2:
             return None

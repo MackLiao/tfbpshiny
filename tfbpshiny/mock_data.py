@@ -660,17 +660,18 @@ def get_mock_datasets() -> list[dict[str, Any]]:
         for supplemental in entry.get("supplemental_configs", []):
             metadata_configs.append(
                 {
-                    "configName": supplemental.get("config_name"),
-                    "dbName": supplemental.get("db_name"),
-                    "sampleIdField": supplemental.get("sample_id_field"),
-                    "sampleCount": supplemental.get("estimated_rows") or 0,
-                    "sampleCountKnown": supplemental.get("estimated_rows") is not None,
-                    "columnCount": (
+                    "config_name": supplemental.get("config_name"),
+                    "db_name": supplemental.get("db_name"),
+                    "sample_id_field": supplemental.get("sample_id_field"),
+                    "sample_count": supplemental.get("estimated_rows") or 0,
+                    "sample_count_known": supplemental.get("estimated_rows")
+                    is not None,
+                    "column_count": (
                         supplemental.get("num_columns")
                         if isinstance(supplemental.get("num_columns"), int)
                         else len(supplemental.get("column_names") or [])
                     ),
-                    "columnNames": supplemental.get("column_names") or [],
+                    "column_names": supplemental.get("column_names") or [],
                 }
             )
 
@@ -682,43 +683,28 @@ def get_mock_datasets() -> list[dict[str, Any]]:
             {
                 "id": str(entry["id"]),
                 "db_name": db_name,
-                "dbName": db_name,
                 "repo_id": entry.get("repo_id"),
-                "repoId": entry.get("repo_id"),
                 "config_name": entry.get("config_name"),
-                "configName": entry.get("config_name"),
                 "name": entry.get("name")
                 or _title_case(entry.get("config_name", db_name)),
                 "type": dataset_type,
                 "group": group,
                 "type_badge": type_badge,
-                "typeBadge": type_badge,
                 "sample_count": (
                     estimated_rows if isinstance(estimated_rows, int) else 0
                 ),
-                "sampleCount": estimated_rows if isinstance(estimated_rows, int) else 0,
                 "sample_count_known": isinstance(estimated_rows, int),
-                "sampleCountKnown": isinstance(estimated_rows, int),
                 "column_count": (
                     num_columns if isinstance(num_columns, int) else len(column_names)
                 ),
-                "columnCount": (
-                    num_columns if isinstance(num_columns, int) else len(column_names)
-                ),
                 "column_names": column_names,
-                "columnNames": column_names,
-                # Legacy aliases retained for compatibility with existing modules.
                 "gene_count": unique_tf_count,
                 "col_count": (
                     num_columns if isinstance(num_columns, int) else len(column_names)
                 ),
-                # Intersection-derived counts start as unknown and get set on refresh.
                 "tf_count": 0,
-                "tfCount": 0,
                 "tf_count_known": False,
-                "tfCountKnown": False,
                 "metadata_configs": metadata_configs,
-                "metadataConfigs": metadata_configs,
                 "metadata": {
                     "source": entry.get("repo_id", "mock"),
                     "meta_table": f"{db_name}_meta",
@@ -979,9 +965,7 @@ def compute_mock_intersection(
     """
     _ = logic_mode
     selected = [entry for entry in datasets if entry.get("selected")]
-    selected_db_names = [
-        str(entry.get("db_name") or entry.get("dbName")) for entry in selected
-    ]
+    selected_db_names = [str(entry.get("db_name")) for entry in selected]
     cells = get_mock_intersection_cells(selected_db_names)
 
     names = [str(entry.get("name", entry.get("db_name"))) for entry in selected]
