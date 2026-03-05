@@ -9,21 +9,23 @@ repositories:
     temperature_celsius:
       path: experimental_conditions.temperature_celsius
     dataset:
-      tags:
-        data_type: Binding
-        assay: CallingCards
-        display_name: "2026 Calling Cards"
       2026_analysis_set:
+        tags:
+          data_type: Binding
+          assay: CallingCards
+          display_name: "2026 Calling Cards"
         db_name: callingcards
         sample_id:
-          field: id
+          field: gm_id
 
   BrentLab/harbison_2004:
     dataset:
-      # binding
       harbison_2004:
+        tags:
+          data_type: Binding
+          assay: ChIP-chip
+          display_name: "2004 ChIP-chip (harbison)"
         db_name: harbison
-        display_name: "2004 ChIP-chip (harbison)"
         sample_id:
           field: sample_id
         carbon_source:
@@ -39,15 +41,17 @@ repositories:
           field: regulator_symbol
 
   BrentLab/rossi_2021:
-    # binding
     carbon_source:
       path: experimental_conditions.media.carbon_source.compound
     temperature_celsius:
       path: experimental_conditions.temperature_celsius
     dataset:
       rossi_2021_af_combined:
+        tags:
+          data_type: Binding
+          assay: ChIPexo
+          display_name: "2021 ChIP-exo (rossi)"
         db_name: rossi
-        display_name: "2021 ChIP-exo (rossi)"
         sample_id:
           field: sample_id
         regulator_locus_tag:
@@ -59,20 +63,24 @@ repositories:
     temperature_celsius:
       path: experimental_conditions.temperature_celsius
     dataset:
-      # binding
       chec_mahendrawada_m2025_af_combined:
+        tags:
+          data_type: Binding
+          assay: ChEC-seq
+          display_name: "2025 ChEC-seq (mahendrawada)"
         db_name: chec_m2025
-        display_name: "2025 CHEC-seq (mahendrawada)"
         sample_id:
           field: sample_id
         regulator_locus_tag:
           field: regulator_locus_tag
         regulator_symbol:
           field: regulator_symbol
-      # perturbation
       rnaseq_reprocessed:
+        tags:
+          data_type: Perturbation
+          assay: degron
+          display_name: "2025 Degron RNA-seq (mahendrawada)"
         db_name: degron
-        display_name: "2025 Degron RNA-seq (mahendrawada)"
         sample_id:
           field: sample_id
         regulator_locus_tag:
@@ -82,10 +90,12 @@ repositories:
 
   BrentLab/hughes_2006:
     dataset:
-      # perturbation
       overexpression:
+        tags:
+          data_type: Perturbation
+          assay: Overexpression
+          display_name: "2006 Overexpression (hughes)"
         db_name: hughes_overexpression
-        display_name: "2006 Overexpression (hughes)"
         sample_id:
           field: sample_id
         carbon_source:
@@ -96,10 +106,12 @@ repositories:
           field: regulator_locus_tag
         regulator_symbol:
           field: regulator_symbol
-      # perturbation
       knockout:
+        tags:
+          data_type: Perturbation
+          assay: TKFO
+          display_name: "2006 Knockout (hughes)"
         db_name: hughes_knockout
-        display_name: "2006 Knockout (hughes)"
         sample_id:
           field: sample_id
         carbon_source:
@@ -113,10 +125,12 @@ repositories:
 
   BrentLab/kemmeren_2014:
     dataset:
-      # perturbation
       kemmeren_2014:
+        tags:
+          data_type: Perturbation
+          assay: TFKO
+          display_name: "2014 TFKO (kemmeren)"
         db_name: kemmeren
-        display_name: "2014 TFKO (kemmeren)"
         sample_id:
           field: sample_id
         carbon_source:
@@ -130,10 +144,12 @@ repositories:
 
   BrentLab/hackett_2020:
     dataset:
-      # perturbation
       hackett_2020:
+        tags:
+          data_type: Perturbation
+          assay: Overexpression
+          display_name: "2020 TFKO (hackett)"
         db_name: hackett
-        display_name: "2020 TFKO (hackett)"
         sample_id:
           field: sample_id
         carbon_source:
@@ -159,9 +175,7 @@ repositories:
         links:
           binding_id:
             - [BrentLab/harbison_2004, harbison_2004]
-            - [BrentLab/callingcards, annotated_features]
-            - [BrentLab/callingcards, annotated_features_combined]
-            - [BrentLab/callingcards, annotated_features_orig_reprocess]
+            - [BrentLab/callingcards, 2026_analysis_set]
             - [BrentLab/rossi_2021, rossi_2021_af_combined]
             - [BrentLab/mahendrawada_2025, chec_mahendrawada_m2025_af_combined]
           perturbation_id:
