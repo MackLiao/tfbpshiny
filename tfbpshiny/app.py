@@ -11,7 +11,6 @@ from typing import Any, Literal, cast
 
 from dotenv import load_dotenv
 from shiny import App, reactive, render, ui
-from tfbpapi import VirtualDB
 
 from configure_logger import configure_logger
 from tfbpshiny.data_service import (
@@ -19,7 +18,6 @@ from tfbpshiny.data_service import (
     get_datasets,
     get_filter_options,
     get_intersection_cells,
-    get_or_create_vdb,
     get_row_count,
     get_sample_count,
 )
@@ -96,35 +94,6 @@ app_ui = ui.page_fillable(
 )
 
 # ---------------------------------------------------------------------------
-# Initialize VirtualDB
-# ---------------------------------------------------------------------------
-
-# note that for testing purposes in development, or quick updates in production,
-# you can use the .env to direct tfbpshiny to an alternate YAML config
-# with env var `VDB_CONFIG_PATH=/path/to/alternate.yaml`
-_default_config = Path(__file__).parent / "brentlab_yeast_collection.yaml"
-config = os.getenv("VDB_CONFIG_PATH", str(_default_config))
-logger.info("VDB config path: %s", config)
-vdb = VirtualDB(config)
-# this will create the default views
-logger.info("VDB initialized with tables: %s", vdb.tables())
-
-# datasets has the structure {data_type:
-#                               {
-#                                 assay1: [db_name1, db_name2, ...],
-#                                 assay2: [db_name3, ...]
-#                               }
-#                             }
-# eg {'Binding': {"Calling Cards": ['2026 Calling cards'],
-#                 "ChIP-chip": ['2004 Harbison']},
-#     'Perturbation': {"Overexpression": ['2020 Hackett'], "TFKO": ['2014 Kemmeren']}}
-datasets: dict[str, dict[str, list]] = {}
-for db_name in vdb.get_datasets():
-    datatype = vdb.get_tags(db_name).get("data_type", "Unknown")
-    assay = vdb.get_tags(db_name).get("assay", "Unknown")
-    datasets.setdefault(datatype, {}).setdefault(assay, []).append(db_name)
-
-# ---------------------------------------------------------------------------
 # Server
 # ---------------------------------------------------------------------------
 
@@ -142,9 +111,12 @@ def app_server(
     # updated in: nav_server (on nav click), _emit_navigation_intent_from_modal
     active_module: reactive.Value[str] = reactive.value("selection")
 
-    # values: list of dataset dicts with id, db_name, type, selected, tf_count, sample_count, etc.
-    # read by: selection_sidebar_server, selection_matrix_server, analysis_sidebar_server, analysis_workspace_server
-    # updated in: initialization, _set_dataset_selected, _handle_refresh_intersection
+    # values: list of dataset dicts with id, db_name, type, selected,
+    #   tf_count, sample_count, etc.
+    # read by: selection_sidebar_server, selection_matrix_server,
+    #   analysis_sidebar_server, analysis_workspace_server
+    # updated in: initialization, _set_dataset_selected,
+    #   _handle_refresh_intersection
     datasets: reactive.Value[list[dict[str, Any]]] = reactive.value([])
     # values: bool
     # read by: selection_sidebar_server
@@ -194,12 +166,18 @@ def app_server(
     last_selection_signature: reactive.Value[str | None] = reactive.value(None)
 
     # values: dataset_id string when config modal is open, else None
-    # read by: modal_layer, _sync_modal_include_toggle, _apply_config_modal_filters, _clear_config_modal_draft
-    # updated in: _handle_open_config, _close_config_modal_from_header, _close_config_modal_from_cancel, _apply_config_modal_filters
+    # read by: modal_layer, _sync_modal_include_toggle,
+    #   _apply_config_modal_filters, _clear_config_modal_draft
+    # updated in: _handle_open_config, _close_config_modal_from_header,
+    #   _close_config_modal_from_cancel, _apply_config_modal_filters
     active_config_dataset_id: reactive.Value[str | None] = reactive.value(None)
-    # values: intersection cell payload {rowDataset, colDataset, intersectionCount}, or None
+    # values: intersection cell payload
+    #   {rowDataset, colDataset, intersectionCount}, or None
     # read by: modal_layer, _emit_navigation_intent_from_modal
-    # updated in: _handle_matrix_cell_click, _close_intersection_modal_from_header, _close_intersection_modal_from_footer, _emit_navigation_intent_from_modal
+    # updated in: _handle_matrix_cell_click,
+    #   _close_intersection_modal_from_header,
+    #   _close_intersection_modal_from_footer,
+    #   _emit_navigation_intent_from_modal
     intersection_detail: reactive.Value[dict[str, Any] | None] = reactive.value(None)
     # values: navigation payload {rowDataset, colDataset, intersectionCount}, or None
     # read by: (currently unused downstream)
@@ -214,10 +192,14 @@ def app_server(
     #   comparison_mode: bool
     #   correlation_value_column: string
     #   page: integer, page_size: integer
-    #   composite_method: string, composite_filter_threshold: float, composite_filter_operator: string
-    #   composite_binding_datasets, composite_perturbation_datasets: list of db name strings
+    #   composite_method: string,
+    #   composite_filter_threshold: float,
+    #   composite_filter_operator: string
+    #   composite_binding_datasets,
+    #   composite_perturbation_datasets: list of db name strings
     # read by: analysis_sidebar_server, analysis_workspace_server
-    # updated in: analysis_sidebar_server (control inputs), _emit_navigation_intent_from_modal
+    # updated in: analysis_sidebar_server (control inputs),
+    #   _emit_navigation_intent_from_modal
     analysis_config: reactive.Value[dict[str, Any]] = reactive.value(
         {
             "view": "summary",
@@ -235,15 +217,14 @@ def app_server(
         }
     )
 
-    # # -- Initialization --
-    # try:
-    #     datasets.set(get_datasets())
-    #     datasets_error.set(None)
-    # except Exception as error:
-    #     datasets.set([])
-    #     datasets_error.set(str(error))
-    # finally:
-    #     datasets_loading.set(False)
+    # -- Initialization --
+    try:
+        datasets.set(get_datasets())
+    except Exception as error:
+        logger.warning("Failed to load datasets on startup: %s", error)
+        datasets.set([])
+    finally:
+        datasets_loading.set(False)
 
     # -- Internal helpers --
     def _dataset_by_id(dataset_id: str) -> dict[str, Any] | None:
@@ -280,7 +261,8 @@ def app_server(
         if changed:
             datasets.set(list(current))
 
-    # called in: _selected_filter_payloads, _selection_signature, _ensure_dataset_filter_options, _handle_refresh_intersection
+    # called in: _selected_filter_payloads, _selection_signature,
+    #   _ensure_dataset_filter_options, _handle_refresh_intersection
     @reactive.calc
     def _selected_datasets() -> list[dict[str, Any]]:
         """
@@ -389,20 +371,14 @@ def app_server(
             if not dataset:
                 raise ValueError("Dataset no longer available")
 
-            # Build a VirtualDB containing at least this dataset.
-            selected = _selected_datasets()
-            selected_db_names = [str(e.get("db_name")) for e in selected]
             ds_db_name = str(dataset.get("db_name"))
-            all_db_names = sorted(set(selected_db_names + [ds_db_name]))
-            vdb = get_or_create_vdb(all_db_names)
-
             metadata_configs = dataset.get("metadata_configs") or []
             if metadata_configs:
                 meta_table = str(metadata_configs[0].get("db_name"))
             else:
                 meta_table = f"{ds_db_name}_meta"
 
-            options = get_filter_options(meta_table, vdb)
+            options = get_filter_options(meta_table)
         except Exception as error:
             logger.warning(
                 "Failed to load filter options for %s: %s", dataset_id, error
@@ -455,8 +431,6 @@ def app_server(
         intersection_error.set(None)
 
         try:
-            vdb = get_or_create_vdb(selected_db_names)
-
             sample_counts: dict[str, int | None] = {}
             column_counts: dict[str, int | None] = {}
             for entry in selected:
@@ -467,10 +441,10 @@ def app_server(
                     # For binding datasets, count distinct samples.
                     # For perturbation datasets, each row is a sample.
                     if dataset_type == "Binding":
-                        sample_counts[dataset_id] = int(get_sample_count(db_name, vdb))
+                        sample_counts[dataset_id] = int(get_sample_count(db_name))
                     else:
-                        sample_counts[dataset_id] = int(get_row_count(db_name, vdb))
-                    column_counts[dataset_id] = int(get_column_count(db_name, vdb))
+                        sample_counts[dataset_id] = int(get_row_count(db_name))
+                    column_counts[dataset_id] = int(get_column_count(db_name))
                 except Exception:
                     sample_counts[dataset_id] = None
                     column_counts[dataset_id] = None
@@ -494,7 +468,6 @@ def app_server(
             payloads = _selected_filter_payloads()
             cells = get_intersection_cells(
                 selected_db_names,
-                vdb,
                 filters=payloads["categorical"],
                 numeric_filters=payloads["numeric"],
             )
@@ -534,7 +507,8 @@ def app_server(
         """
         Store the clicked intersection cell payload to open the detail modal.
 
-        :param payload: dict with ``rowDataset``, ``colDataset``, and ``intersectionCount``
+        :param payload: dict with ``rowDataset``, ``colDataset``,
+            and ``intersectionCount``
 
         """
         intersection_detail.set(payload)

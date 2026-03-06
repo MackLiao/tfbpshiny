@@ -10,16 +10,14 @@ from __future__ import annotations
 
 import logging
 import math
-import os
 import re
 import statistics
-import tempfile
-import threading
 from pathlib import Path
 from typing import Any
 
-import yaml  # type: ignore[import-untyped]
-from tfbpapi import VirtualDB
+from tfbpapi import MetadataConfig, VirtualDB
+
+from tfbpshiny.vdb import get_vdb
 
 logger = logging.getLogger("shiny")
 
@@ -43,12 +41,44 @@ def _dataset_group_and_badge(dataset_type: str) -> tuple[str, str]:
         return ("perturbation", "PR")
     if dataset_type == "Comparative":
         return ("comparative", "CO")
-    raise ValueError(f"Unknown dataset type: {dataset_type}")
+    logger.warning("Unknown dataset type: %s", dataset_type)
+    return ("unknown", "UK")
 
 
 def _title_case(raw: str) -> str:
     parts = re.sub(r"[_-]+", " ", raw).strip()
     return re.sub(r"\b\w", lambda m: m.group(0).upper(), parts)
+
+
+_IDENTIFIER_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
+
+
+def _validate_identifier(name: str) -> str:
+    """Validate that *name* is a safe SQL identifier (alphanumeric + underscore)."""
+    if not _IDENTIFIER_RE.match(name):
+        raise ValueError(f"Unsafe SQL identifier: {name!r}")
+    return name
+
+
+def _infer_dataset_type(repo_id: str, config_name: str, ds_cfg: Any) -> str:
+    """Infer dataset type from tags or config fields."""
+    tags = getattr(ds_cfg, "tags", None) or {}
+    if isinstance(tags, dict):
+        data_type = tags.get("data_type", "")
+        if data_type:
+            return str(data_type)
+
+    if getattr(ds_cfg, "links", None):
+        return "Comparative"
+
+    # Heuristic fallback based on config name or repo id.
+    lower = (config_name + " " + repo_id).lower()
+    if "binding" in lower or "chip" in lower or "calling" in lower:
+        return "Binding"
+    if "perturbation" in lower or "expression" in lower or "tfko" in lower:
+        return "Perturbation"
+
+    return "Binding"
 
 
 # ---------------------------------------------------------------------------
@@ -64,6 +94,7 @@ def get_datasets(yaml_path: Path | str | None = None) -> list[dict[str, Any]]:
 
     """
     path = Path(yaml_path) if yaml_path else _YAML_PATH
+    config = MetadataConfig.from_yaml(path)
 
     enriched: list[dict[str, Any]] = []
     for repo_id, repo_cfg in config.repositories.items():
@@ -144,99 +175,7 @@ def get_datasets(yaml_path: Path | str | None = None) -> list[dict[str, Any]]:
 
 
 # ---------------------------------------------------------------------------
-# 2. get_or_create_vdb  (replaces sync_mock_active_set_config)
-# ---------------------------------------------------------------------------
-
-_vdb_cache: dict[str, VirtualDB] = {}
-_vdb_cache_key: str | None = None
-_vdb_lock = threading.Lock()
-
-
-def _get_hf_token() -> str | None:
-    return os.environ.get("HF_TOKEN")
-
-
-def _build_subset_config(
-    full_config: MetadataConfig,
-    selected_db_names: set[str],
-) -> Path:
-    """Write a subset YAML config containing only the selected datasets."""
-    raw = yaml.safe_load(_YAML_PATH.read_text())
-
-    subset_repos: dict[str, Any] = {}
-    for repo_id, repo_cfg in full_config.repositories.items():
-        if not repo_cfg.dataset:
-            continue
-
-        matched_datasets: dict[str, Any] = {}
-        for config_name, ds_cfg in repo_cfg.dataset.items():
-            db_name = ds_cfg.db_name or config_name
-            if db_name in selected_db_names:
-                # Pull the original YAML dict for this dataset to avoid
-                # needing to reverse-serialize pydantic models.
-                orig_repo = raw.get("repositories", {}).get(repo_id, {})
-                orig_ds = orig_repo.get("dataset", {}).get(config_name, {})
-                if orig_ds:
-                    matched_datasets[config_name] = orig_ds
-
-        if matched_datasets:
-            # Include repo-level properties (everything except 'dataset').
-            orig_repo = raw.get("repositories", {}).get(repo_id, {})
-            repo_entry: dict[str, Any] = {
-                k: v for k, v in orig_repo.items() if k != "dataset"
-            }
-            repo_entry["dataset"] = matched_datasets
-            subset_repos[repo_id] = repo_entry
-
-    subset: dict[str, Any] = {"repositories": subset_repos}
-    if "factor_aliases" in raw:
-        subset["factor_aliases"] = raw["factor_aliases"]
-    if "missing_value_labels" in raw:
-        subset["missing_value_labels"] = raw["missing_value_labels"]
-    if "description" in raw:
-        subset["description"] = raw["description"]
-
-    tmp = tempfile.NamedTemporaryFile(
-        mode="w",
-        suffix=".yaml",
-        prefix="tfbpshiny_subset_",
-        delete=False,
-    )
-    yaml.safe_dump(subset, tmp, default_flow_style=False)
-    tmp.close()
-    return Path(tmp.name)
-
-
-def get_or_create_vdb(
-    selected_db_names: list[str],
-    token: str | None = None,
-) -> VirtualDB:
-    """Return a VirtualDB for the selected datasets, cached by selection set."""
-    global _vdb_cache_key
-
-    cache_key = ",".join(sorted(selected_db_names))
-    with _vdb_lock:
-        if cache_key == _vdb_cache_key and cache_key in _vdb_cache:
-            return _vdb_cache[cache_key]
-
-        full_config = MetadataConfig.from_yaml(_YAML_PATH)
-        subset_path = _build_subset_config(full_config, set(selected_db_names))
-        hf_token = token or _get_hf_token()
-
-        try:
-            vdb = VirtualDB(config_path=subset_path, token=hf_token, lazy=True)
-        finally:
-            subset_path.unlink(missing_ok=True)
-
-        _vdb_cache.clear()
-        _vdb_cache[cache_key] = vdb
-        _vdb_cache_key = cache_key
-
-        return vdb
-
-
-# ---------------------------------------------------------------------------
-# 3. get_filter_options  (replaces get_mock_filter_options)
+# 2. get_filter_options  (replaces get_mock_filter_options)
 # ---------------------------------------------------------------------------
 
 _NUMERIC_TYPE_PATTERN = re.compile(
@@ -247,9 +186,10 @@ _NUMERIC_TYPE_PATTERN = re.compile(
 
 def get_filter_options(
     meta_table: str,
-    vdb: VirtualDB,
+    vdb: VirtualDB | None = None,
 ) -> list[dict[str, Any]]:
     """Discover filter fields from a metadata table via VirtualDB.describe()."""
+    vdb = vdb or get_vdb()
     safe_table = _validate_identifier(meta_table)
     try:
         desc_df = vdb.describe(safe_table)
@@ -279,7 +219,7 @@ def get_filter_options(
                 min_val = float(stats["mn"].iloc[0]) if len(stats) else 0.0
                 max_val = float(stats["mx"].iloc[0]) if len(stats) else 0.0
             except Exception:
-                logger.debug(
+                logger.warning(
                     "Failed to get min/max for %s.%s",
                     safe_table,
                     safe_col,
@@ -303,7 +243,7 @@ def get_filter_options(
                 )
                 values = sorted(str(v) for v in vals_df[col_name].tolist())
             except Exception:
-                logger.debug(
+                logger.warning(
                     "Failed to get distinct values for %s.%s",
                     safe_table,
                     safe_col,
@@ -327,14 +267,15 @@ def get_filter_options(
 # ---------------------------------------------------------------------------
 
 
-def get_row_count(db_name: str, vdb: VirtualDB) -> int:
+def get_row_count(db_name: str, vdb: VirtualDB | None = None) -> int:
     """Return the measurement count for a dataset's metadata table."""
+    vdb = vdb or get_vdb()
     safe_table = _validate_identifier(f"{db_name}_meta")
     result = vdb.query(f"SELECT COUNT(*) AS cnt FROM {safe_table}")
     return int(result["cnt"].iloc[0]) if len(result) else 0
 
 
-def get_sample_count(db_name: str, vdb: VirtualDB) -> int:
+def get_sample_count(db_name: str, vdb: VirtualDB | None = None) -> int:
     """
     Return the sample count (distinct sample_id) for a dataset.
 
@@ -342,15 +283,22 @@ def get_sample_count(db_name: str, vdb: VirtualDB) -> int:
     unique sample count instead of measurement count.
 
     """
+    vdb = vdb or get_vdb()
     safe_table = _validate_identifier(f"{db_name}_meta")
-    # Use the resolved sample_id column name from VirtualDB config
-    sample_col = vdb._get_sample_id_col(db_name)
+    # Use the resolved sample_id column name from VirtualDB config.
+    # _get_sample_id_col is private but has no public equivalent; fall back to
+    # "sample_id" if the method is removed in a future tfbpapi release.
+    try:
+        sample_col = _validate_identifier(vdb._get_sample_id_col(db_name))
+    except (AttributeError, ValueError):
+        sample_col = "sample_id"
     result = vdb.query(f"SELECT COUNT(DISTINCT {sample_col}) AS cnt FROM {safe_table}")
     return int(result["cnt"].iloc[0]) if len(result) else 0
 
 
-def get_column_count(db_name: str, vdb: VirtualDB) -> int:
+def get_column_count(db_name: str, vdb: VirtualDB | None = None) -> int:
     """Return the column count for a dataset's metadata table."""
+    vdb = vdb or get_vdb()
     safe_table = _validate_identifier(f"{db_name}_meta")
     try:
         desc_df = vdb.describe(safe_table)
@@ -431,11 +379,12 @@ def _build_where_clause(
 
 def get_intersection_cells(
     db_names: list[str],
-    vdb: VirtualDB,
+    vdb: VirtualDB | None = None,
     filters: dict[str, Any] | None = None,
     numeric_filters: dict[str, Any] | None = None,
 ) -> list[dict[str, Any]]:
     """Compute pairwise TF set intersections across selected datasets."""
+    vdb = vdb or get_vdb()
     filters = filters or {}
     numeric_filters = numeric_filters or {}
 
@@ -539,7 +488,7 @@ def get_dto_config(yaml_path: Path | str | None = None) -> dict[str, list[str]]:
 def get_dto_data(
     binding_dbs: list[str],
     perturbation_dbs: list[str],
-    vdb: VirtualDB,
+    vdb: VirtualDB | None = None,
 ) -> list[dict[str, Any]]:
     """
     Query DTO data for the selected binding and perturbation datasets.
@@ -551,12 +500,13 @@ def get_dto_data(
     Args:
         binding_dbs: List of binding dataset db_names to filter
         perturbation_dbs: List of perturbation dataset db_names to filter
-        vdb: VirtualDB instance with DTO dataset loaded
+        vdb: VirtualDB instance (defaults to global singleton)
 
     Returns:
         List of dicts with binding_id, perturbation_id, dto_pvalue, and dto_fdr
 
     """
+    vdb = vdb or get_vdb()
     # Check if dto_expanded view exists
     try:
         fields = set(vdb.get_fields("dto_expanded"))
@@ -666,7 +616,7 @@ def _pearson_correlation(x: list[float], y: list[float]) -> float | None:
 def get_median_correlation_matrix(
     db_names: list[str],
     value_column: str,
-    vdb: VirtualDB,
+    vdb: VirtualDB | None = None,
 ) -> dict[str, Any]:
     """
     Compute a median-of-per-TF-correlations matrix across datasets.
@@ -677,6 +627,7 @@ def get_median_correlation_matrix(
     3. The cell value is the median of the per-TF correlations.
 
     """
+    vdb = vdb or get_vdb()
     safe_value_col = _validate_identifier(value_column)
 
     # --- gather per-dataset data: {db_name: {tf: {target: value}}} ---
@@ -813,7 +764,7 @@ _STRUCTURAL_COLUMNS = frozenset(
 
 def get_shared_numeric_columns(
     db_names: list[str],
-    vdb: VirtualDB,
+    vdb: VirtualDB | None = None,
 ) -> list[str]:
     """
     Return sorted numeric columns available across datasets' meta tables.
@@ -828,6 +779,7 @@ def get_shared_numeric_columns(
     Excludes structural columns (identifiers) that aren't analysis values.
 
     """
+    vdb = vdb or get_vdb()
     if not db_names:
         return []
 

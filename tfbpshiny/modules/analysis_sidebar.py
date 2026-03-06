@@ -2,16 +2,18 @@
 
 from __future__ import annotations
 
+import logging
 from typing import Any
 
 from shiny import module, reactive, render, ui
 
 from tfbpshiny.data_service import (
     get_dto_config,
-    get_or_create_vdb,
     get_shared_numeric_columns,
 )
 from tfbpshiny.utils.source_name_lookup import get_source_name_dict
+
+logger = logging.getLogger("shiny")
 
 _MODULE_LABELS: dict[str, str] = {
     "binding": "Binding Analysis",
@@ -262,12 +264,11 @@ def analysis_sidebar_server(
         ]
 
     @reactive.calc
-    def _vdb_for_module() -> tuple[Any, list[str]] | None:
+    def _numeric_columns_for_module() -> list[str] | None:
         """
-        Cache VDB and numeric columns for current module's datasets.
+        Cache numeric columns for current module's datasets.
 
-        Memoized by the sorted db_names of relevant datasets. This prevents duplicate
-        expensive VDB creation when switching modules.
+        Memoized by the sorted db_names of relevant datasets.
 
         """
         relevant = _relevant_datasets()
@@ -278,10 +279,9 @@ def analysis_sidebar_server(
             return None
 
         try:
-            vdb = get_or_create_vdb(db_names)
-            columns = get_shared_numeric_columns(db_names, vdb)
-            return (vdb, columns)
-        except Exception:
+            return get_shared_numeric_columns(db_names)
+        except Exception as e:
+            logger.warning("Failed to get shared numeric columns: %s", e)
             return None
 
     def _set_config_if_changed(next_config: dict[str, Any]) -> None:
@@ -387,15 +387,13 @@ def analysis_sidebar_server(
                 "Need 2+ datasets for correlation.",
             )
 
-        # Use cached VDB and columns from _vdb_for_module().
-        cached = _vdb_for_module()
-        if cached is None:
+        # Use cached columns from _numeric_columns_for_module().
+        columns = _numeric_columns_for_module()
+        if columns is None:
             return ui.p(
                 {"style": "font-size:12px; color:var(--color-text-muted);"},
                 "Unable to load column metadata. Check connection.",
             )
-
-        _, columns = cached
 
         if not columns:
             return ui.p(

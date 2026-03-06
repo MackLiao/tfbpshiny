@@ -12,7 +12,6 @@ from shiny import module, reactive, render, ui
 from tfbpshiny.data_service import (
     get_dto_data,
     get_median_correlation_matrix,
-    get_or_create_vdb,
 )
 from tfbpshiny.mock_data import get_mock_source_summary
 from tfbpshiny.utils.create_distribution_plot import create_distribution_plot
@@ -109,18 +108,17 @@ def analysis_workspace_server(
         return selected_db, comparison_db, comparison_mode
 
     @reactive.calc
-    def _vdb_for_correlation() -> tuple[Any, dict[str, Any]] | None:
+    def _correlation_result() -> dict[str, Any] | None:
         """
-        Cache VDB and correlation result for current correlation view.
+        Cache correlation result for current correlation view.
 
-        Memoized by the relevant datasets and value column. This prevents duplicate
-        expensive VDB creation when switching views or modules.
+        Memoized by the relevant datasets and value column.
 
         """
         config = analysis_config()
         view = str(config.get("view", ""))
 
-        # Only create VDB when in correlation view.
+        # Only compute when in correlation view.
         if view != "correlation":
             return None
 
@@ -135,10 +133,9 @@ def analysis_workspace_server(
             return None
 
         try:
-            vdb = get_or_create_vdb(db_names)
-            result = get_median_correlation_matrix(db_names, value_column, vdb)
-            return (vdb, result)
-        except Exception:
+            return get_median_correlation_matrix(db_names, value_column)
+        except Exception as e:
+            logger.warning("Failed to compute correlation matrix: %s", e)
             return None
 
     @render.ui
@@ -186,9 +183,9 @@ def analysis_workspace_server(
             return _render_summary(selected_db)
 
         if view == "correlation":
-            # Use cached VDB and correlation result.
-            cached = _vdb_for_correlation()
-            if cached is None:
+            # Use cached correlation result.
+            result = _correlation_result()
+            if result is None:
                 return ui.div(
                     {"class": "empty-state"},
                     ui.h3("Correlation data unavailable"),
@@ -196,7 +193,6 @@ def analysis_workspace_server(
                         "Select a valid value column present in at least two datasets."
                     ),
                 )
-            _, result = cached
             value_column = str(config.get("correlation_value_column", ""))
             return _render_correlation_from_result(result, value_column)
 
@@ -253,9 +249,7 @@ def _render_composite(
     # Query DTO data from VirtualDB
     df = pd.DataFrame()
     try:
-        all_db_names = bd_names + pr_names + ["dto"]
-        vdb = get_or_create_vdb(all_db_names)
-        raw = get_dto_data(bd_names, pr_names, vdb)
+        raw = get_dto_data(bd_names, pr_names)
 
         if raw:
             df = pd.DataFrame(raw)
@@ -545,8 +539,7 @@ def _render_correlation_matrix(
         )
 
     try:
-        vdb = get_or_create_vdb(db_names)
-        result = get_median_correlation_matrix(db_names, value_column, vdb)
+        result = get_median_correlation_matrix(db_names, value_column)
     except Exception as e:
         return ui.div(
             {"class": "empty-state"},
