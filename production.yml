@@ -8,10 +8,10 @@ services:
       context: .
       dockerfile: ./compose/production/shiny/Dockerfile
     image: tfbpshiny_production_app
-    env_file:
-      - ./.envs/.production/.shiny
     environment:
       - HF_HOME=/hf-cache
+      - HF_TOKEN
+      - DOCKER_ENV
     volumes:
       - hf_cache:/hf-cache
     expose:

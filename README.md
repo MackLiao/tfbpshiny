@@ -85,36 +85,43 @@ terraform apply
 
 Note the `public_ip` output and update your DNS records to point at it.
 
-### 2. Prepare environment files
+### 2. Prepare the environment file
 
-The app requires two secret files that are **not** stored in the repository.
-Create them locally, then copy them to the instance:
+The app requires a single `.env` file that is **not** stored in the repository.
+Create it locally and copy it to the instance:
 
-#### .envs/.production/.shiny
+#### .env
 
 ```bash
 DOCKER_ENV=true
 HF_TOKEN=<your_huggingface_token>       # optional; only for private HF datasets
 VIRTUALDB_CONFIG=/path/to/config.yaml   # optional; defaults to bundled config
+TRAEFIK_DASHBOARD_PASSWORD_HASH=myusername:$$2y$$05$$...  # see below
 ```
 
-#### .envs/.production/.traefik
+To generate the bcrypt hash for the Traefik dashboard:
 
 ```bash
-TRAEFIK_DASHBOARD_PASSWORD_HASH=<bcrypt_hash>
+docker run --rm httpd:alpine htpasswd -nbB myusername mypassword
 ```
 
-To generate a bcrypt hash for the Traefik dashboard:
+This prints something like:
 
-```bash
-docker run --rm httpd:alpine htpasswd -nbB admin 'yourpassword'
-# Copy the hash portion (after "admin:") into the env file
+```
+myusername:$2y$05$abcdefghijklmnopqrstuuABCDEFGHIJKLMNOPQRSTUVWXYZ123456
 ```
 
-Copy the env files to the instance:
+Copy the full output into `.env`, but **escape every `$` as `$$`** so Docker
+Compose does not interpret them as variable references:
 
 ```bash
-scp -r .envs/ ec2-user@<public_ip>:/opt/tfbpshiny/
+TRAEFIK_DASHBOARD_PASSWORD_HASH=myusername:$$2y$$05$$abcdefghijklmnopqrstuuABCDEFGHIJKLMNOPQRSTUVWXYZ123456
+```
+
+Copy the env file to the instance:
+
+```bash
+scp .env ec2-user@<public_ip>:/opt/tfbpshiny/
 ```
 
 ### 3. Build and start the stack
@@ -125,13 +132,22 @@ cd /opt/tfbpshiny
 docker compose -f production.yml up -d --build
 ```
 
+**First deploy only** — fix `/hf-cache` volume ownership so the non-root `appuser`
+can write HuggingFace downloads to the named volume:
+
+```bash
+docker compose -f production.yml run --rm --user root shinyapp chown appuser /hf-cache
+docker compose -f production.yml up -d
+```
+
 Traefik will automatically obtain a Let's Encrypt TLS certificate on first start.
 
 ### HuggingFace cache
 
 The shinyapp container sets `HF_HOME=/hf-cache` and mounts a named Docker volume
 there. HuggingFace model data is downloaded once and persists across container
-rebuilds — no re-download on `docker compose up --build`.
+rebuilds — no re-download on `docker compose up --build`. The volume ownership fix
+above is only needed once; the volume retains correct permissions across rebuilds.
 
 ### Logs
 

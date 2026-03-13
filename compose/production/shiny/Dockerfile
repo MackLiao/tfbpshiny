@@ -13,19 +13,18 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     git \
     && rm -rf /var/lib/apt/lists/*
 
-# Copy package metadata first so the pip install layer is cached as long as
-# pyproject.toml / README.md don't change.
+# Copy all source files needed to build and install the package
 COPY pyproject.toml README.md ./
-
-# Install dependencies (no editable install — production image)
-RUN pip install --no-cache-dir .
-
-# Copy application source after installing deps to maximise layer reuse
 COPY tfbpshiny/ tfbpshiny/
 COPY configure_logger.py .
 
+# Install the package and its dependencies
+RUN pip install --no-cache-dir .
+
 # Run as a non-root user
-RUN useradd --no-create-home --shell /bin/false appuser
+RUN useradd --no-create-home --shell /bin/false appuser && \
+    mkdir -p /hf-cache && \
+    chown appuser /hf-cache
 USER appuser
 
 # Shiny listens on 0.0.0.0:8000 inside the container; host/port can be
