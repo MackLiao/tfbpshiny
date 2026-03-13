@@ -19,6 +19,7 @@ faicons = "^0.2.2"
 pytest = "^8.3.5"
 ipykernel = "^6.29.5"
 nbformat = "^5.10.4"
+playwright = "^1.58.0"
 
 [tool.pytest.ini_options]
 minversion = "6.0"
@@ -30,8 +31,8 @@ pythonpath = ['.']
 addopts = "--ignore=tmp"
 
 [tool.coverage.run]
-include = ["yeastdnnexplorer/**"]
-omit = ["*/tests/*", "experiments/"]
+include = ["tfbpshiny/**"]
+omit = ["*/tests/*"]
 
 [tool.black]
 line-length = 88
@@ -42,7 +43,7 @@ include = '\.py$'
 profile = "black"
 line_length = 88
 known_first_party = [
-    "yeastdnnexplorer",
+    "tfbpshiny",
 ]
 skip = ["venv/"]
 

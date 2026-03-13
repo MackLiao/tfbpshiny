@@ -185,6 +185,12 @@ logs
 #  option (not recommended) you can uncomment the following to ignore the entire idea folder.
 #.idea/
 
-CLAUDE.md
 .claude/
 .tmp/
+
+# Terraform
+terraform/.terraform/
+terraform/*.tfstate
+terraform/*.tfstate.backup
+terraform/.terraform.lock.hcl
+terraform/*.tfvars

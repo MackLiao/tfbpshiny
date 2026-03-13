@@ -1,0 +1,14 @@
+{
+	"folders": [
+		{
+			"path": ".."
+		},
+		// put the tfbpapi at the same level as tfbshiny. During development,
+		// it is very useful to have both in your workspace
+		{
+			"path": "../../tfbpapi",
+			"name": "tfbpapi (reference)"
+		}
+	],
+	"settings": {}
+}

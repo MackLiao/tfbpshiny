@@ -1,0 +1,7 @@
+# Copy this file to terraform.tfvars and fill in your values.
+# terraform.tfvars is gitignored — never commit it.
+
+aws_region     = "us-east-2"
+instance_type  = "t3.small"
+key_name       = "my-key-pair-name"   # must exist in the target region
+root_volume_gb = 20
