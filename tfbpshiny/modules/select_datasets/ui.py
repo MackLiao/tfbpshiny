@@ -10,6 +10,15 @@ from shiny import module, ui
 from tfbpshiny.components import workspace_heading, workspace_shell
 from tfbpshiny.modules.select_datasets.queries import FIELD_TYPE_OVERRIDES
 
+FIELD_DISPLAY_NAMES: dict[str, str] = {
+    "temperature_celsius": "Temperature (\u00b0C)",
+}
+
+
+def _display_name(field: str) -> str:
+    """Return a human-readable label for ``field``."""
+    return FIELD_DISPLAY_NAMES.get(field, field.replace("_", " ").title())
+
 
 def _filter_control(
     field: str,
@@ -49,6 +58,8 @@ def _filter_control(
             value=saved_val,
         )
 
+    label = _display_name(field)
+
     if override_kind == "categorical" or dtype.name in ("object", "category"):
         raw = (
             union_levels
@@ -63,7 +74,7 @@ def _filter_control(
             {"class": "filter-option-card"},
             ui.div(
                 {"class": "filter-option-header"},
-                ui.span({"class": "filter-option-title"}, field),
+                ui.span({"class": "filter-option-title"}, label),
                 _apply_to_all_toggle() if is_common else ui.span(),
             ),
             ui.input_selectize(
@@ -82,10 +93,10 @@ def _filter_control(
             {"class": "filter-option-card"},
             ui.div(
                 {"class": "filter-option-header"},
-                ui.span({"class": "filter-option-title"}, field),
+                ui.span({"class": "filter-option-title"}, label),
                 _apply_to_all_toggle() if is_common else ui.span(),
             ),
-            ui.input_switch(f"filter_{field}", label=field, value=saved_val),
+            ui.input_switch(f"filter_{field}", label=label, value=saved_val),
         )
 
     if dtype.name in ("float64", "int64", "float32", "int32"):
@@ -102,7 +113,7 @@ def _filter_control(
             {"class": "filter-option-card"},
             ui.div(
                 {"class": "filter-option-header"},
-                ui.span({"class": "filter-option-title"}, field),
+                ui.span({"class": "filter-option-title"}, label),
                 _apply_to_all_toggle() if is_common else ui.span(),
             ),
             ui.input_slider(
@@ -164,9 +175,8 @@ def dataset_filter_modal_ui(
     common_cards: list[ui.Tag] = []
     specific_cards: list[ui.Tag] = []
 
-    for field in df.columns:
-        if field == "sample_id":
-            continue
+    for field in sorted(c for c in df.columns if c != "sample_id"):
+
         is_common = field in cf
         card = _filter_control(
             field,
