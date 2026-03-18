@@ -26,7 +26,7 @@ repositories:
         tags:
           data_type: binding
           assay: ChIP-chip
-          display_name: "2004 ChIP-chip (harbison)"
+          display_name: "2004 ChIP-chip (Harbison)"
         db_name: harbison
         sample_id:
           field: sample_id
@@ -54,7 +54,7 @@ repositories:
         tags:
           data_type: binding
           assay: ChIPexo
-          display_name: "2021 ChIP-exo (rossi)"
+          display_name: "2021 ChIP-exo (Rossi)"
         db_name: rossi
         sample_id:
           field: sample_id
@@ -90,7 +90,7 @@ repositories:
         tags:
           data_type: binding
           assay: ChEC-seq
-          display_name: "2025 ChEC-seq (mahendrawada)"
+          display_name: "2025 ChEC-seq (Mahendrawada)"
         db_name: chec_m2025
         sample_id:
           field: sample_id
@@ -103,7 +103,7 @@ repositories:
         tags:
           data_type: perturbation
           assay: ChIPexo
-          display_name: "2025 Degron (mahendrawada)"
+          display_name: "2025 Degron (Mahendrawada)"
         db_name: degron
         sample_id:
           field: sample_id
@@ -119,7 +119,7 @@ repositories:
         tags:
           data_type: perturbation
           assay: overexpression
-          display_name: "2006 Overexpression (hughes)"
+          display_name: "2006 Overexpression (Hughes)"
         db_name: hughes_overexpression
         sample_id:
           field: sample_id
@@ -137,7 +137,7 @@ repositories:
         tags:
           data_type: perturbation
           assay: TFKO
-          display_name: "2006 Knockout (hughes)"
+          display_name: "2006 Knockout (Hughes)"
         db_name: hughes_knockout
         sample_id:
           field: sample_id
@@ -158,7 +158,7 @@ repositories:
         tags:
           data_type: perturbation
           assay: TFKO
-          display_name: "2014 TFKO (kemmeren)"
+          display_name: "2014 TFKO (Kemmeren)"
         db_name: kemmeren
         sample_id:
           field: sample_id
@@ -179,7 +179,7 @@ repositories:
         tags:
           data_type: perturbation
           assay: overexpression
-          display_name: "2020 Overexpression (hackett)"
+          display_name: "2020 Overexpression (Hackett)"
         db_name: hackett
         sample_id:
           field: sample_id
