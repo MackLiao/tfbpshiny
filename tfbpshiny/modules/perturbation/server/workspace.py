@@ -37,7 +37,7 @@ def perturbation_workspace_server(
     """
 
     display_names: dict[str, str] = {
-        db_name: vdb.get_tags(db_name).get("display_name", db_name)
+        db_name: vdb.get_tags(db_name).get("display_name", db_name).title()
         for db_name in vdb.get_datasets()
     }
 
@@ -196,10 +196,14 @@ def perturbation_workspace_server(
         previously selected regulator is preserved across re-renders if it is still
         present in the new choice set.
 
+        Uses ``reactive.isolate`` to read the current selection without subscribing
+        to it — this prevents the render from re-firing when the user types or
+        changes their selection, which would destroy the selectize widget.
+
         :trigger _all_corr_data: re-renders when correlation data changes (new
-        datasets selected, filters applied, or column/method changed). :trigger
-        active_perturbation_datasets: re-renders to refresh the symbol     map when the
-        active dataset set changes.
+            datasets selected, filters applied, or column/method changed).
+        :trigger active_perturbation_datasets: re-renders to refresh the symbol
+            map when the active dataset set changes.
 
         """
         corr_data = _all_corr_data()
@@ -215,26 +219,31 @@ def perturbation_workspace_server(
                     zip(sym_df["regulator_locus_tag"], sym_df["regulator_symbol"])
                 )
                 break
-            except Exception:
-                pass
+            except Exception as exc:
+                logger.warning(f"Failed to load symbols for {db}: {exc}")
 
         all_regs: set[str] = set()
         for df in corr_data.values():
             if not df.empty:
                 all_regs |= set(df["regulator_locus_tag"].dropna().unique())
 
-        regs = sorted(all_regs)
-        if not regs:
+        if not all_regs:
             return ui.span()
+        regs = sorted(all_regs, key=lambda r: (sym_map.get(r, r) or r).lower())
         choices = {r: sym_map.get(r, r) or r for r in regs}
 
-        try:
-            current = str(input.selected_regulator())
-        except Exception:
-            current = ""
+        with reactive.isolate():
+            try:
+                current = str(input.selected_regulator())
+            except Exception:
+                current = ""
         default = current if current in choices else regs[0]
 
-        return ui.input_select(
+        logger.debug(
+            f"regulator_selector re-rendered: {len(regs)} choices, default={default}"
+        )
+
+        return ui.input_selectize(
             "selected_regulator",
             "Regulator",
             choices=choices,
@@ -352,8 +361,11 @@ def perturbation_workspace_server(
             fig.update_yaxes(title_text=f"{lb}: {col_b}", row=1, col=idx)
             fig.layout.annotations[idx - 1].text += f"  (r={r:.3f})"
 
+        for ann in fig.layout.annotations:
+            ann.textangle = -10
+            ann.font = dict(size=11)
+
         fig.update_layout(
-            title=f"Regulator: {reg}",
             margin=dict(l=40, r=20, t=70, b=50),
         )
         return ui.HTML(to_html(fig, include_plotlyjs=False, full_html=False))

@@ -30,7 +30,10 @@ def binding_workspace_ui() -> ui.Tag:
             ui.output_ui("distributions_plot"),
             ui.hr(),
             ui.output_ui("regulator_selector"),
-            ui.output_ui("regulator_plots"),
+            ui.div(
+                {"style": "min-height: 400px;"},
+                ui.output_ui("regulator_plots"),
+            ),
         ),
     )
 
