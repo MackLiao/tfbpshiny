@@ -1,34 +1,34 @@
-# Use a slim Python base
 FROM python:3.11-slim
 
-# Set working directory
+# Ensures stdout/stderr are flushed immediately — required for live logging
+ENV PYTHONUNBUFFERED=1
+ENV PYTHONDONTWRITEBYTECODE=1
+
 WORKDIR /app
 
-# Install system-level build dependencies
-# TODO: can remove git when no dependencies need
-# to install from github
-# TODO: zlib, lib, liblzma packages can be removed
-# if callingcardstools is removed from the deps
-RUN apt-get update && apt-get install -y \
+# System deps: only what pip install actually needs at build time.
+# git is required while any dependency installs from a VCS URL.
+RUN apt-get update && apt-get install -y --no-install-recommends \
     build-essential \
     git \
-    zlib1g-dev \
-    libbz2-dev \
-    liblzma-dev \
     && rm -rf /var/lib/apt/lists/*
 
-# Copy metadata first for better caching
+# Copy all source files needed to build and install the package
 COPY pyproject.toml README.md ./
 COPY tfbpshiny/ tfbpshiny/
-# TODO: remove this when the corr plots are drawn from DB
-COPY tmp/shiny_data tmp/shiny_data
 COPY configure_logger.py .
 
-# Install runtime dependencies
+# Install the package and its dependencies
 RUN pip install --no-cache-dir .
 
-# Now copy the rest of the app
-COPY . .
+# Run as a non-root user
+RUN useradd --no-create-home --shell /bin/false appuser && \
+    mkdir -p /hf-cache && \
+    chown appuser /hf-cache
+USER appuser
 
-# Set the entrypoint
-CMD ["python", "-m", "tfbpshiny", "shiny"]
+# Shiny listens on 0.0.0.0:8000 inside the container; host/port can be
+# overridden via the compose `command:` key.
+EXPOSE 8000
+
+CMD ["python", "-m", "tfbpshiny", "--log-level", "INFO", "shiny", "--host", "0.0.0.0"]

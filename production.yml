@@ -1,30 +1,39 @@
 volumes:
   production_traefik: {}
-  shiny_logs: {}
+  hf_cache: {}
 
 services:
   shinyapp:
-    ports:
-      - "8000:8000"
     build:
       context: .
       dockerfile: ./compose/production/shiny/Dockerfile
     image: tfbpshiny_production_app
-    env_file:
-      - ./.envs/.production/.shiny
+    environment:
+      - HF_HOME=/hf-cache
+      - HF_TOKEN
+      - DOCKER_ENV
     volumes:
-      - shiny_logs:/app/logs
+      - hf_cache:/hf-cache
+    expose:
+      - "8000"
     labels:
       - "traefik.enable=true"
-      - "traefik.http.routers.shinyapp.rule=Host(`tfbindingandperturbation.com`)"
+      # Main site
+      - "traefik.http.routers.shinyapp.rule=Host(`tfbindingandperturbation.com`) || Host(`www.tfbindingandperturbation.com`)"
       - "traefik.http.routers.shinyapp.entrypoints=web-secure"
       - "traefik.http.routers.shinyapp.tls=true"
       - "traefik.http.routers.shinyapp.tls.certresolver=letsencrypt"
       - "traefik.http.services.shinyapp.loadbalancer.server.port=8000"
     networks:
       - web
-    command: python -m tfbpshiny shiny --host 0.0.0.0
-
+    logging:
+      driver: awslogs
+      options:
+        awslogs-group: /tfbpshiny/production
+        awslogs-region: us-east-2
+        awslogs-stream: shinyapp
+        awslogs-create-group: "true"
+    restart: unless-stopped
 
   traefik:
     build:
@@ -37,8 +46,26 @@ services:
     volumes:
       - "/var/run/docker.sock:/var/run/docker.sock:ro"
       - production_traefik:/etc/traefik/acme
+    labels:
+      - "traefik.enable=true"
+      # Traefik dashboard — protected by basic auth
+      - "traefik.http.routers.dashboard.rule=Host(`shinytraefik.tfbindingandperturbation.com`)"
+      - "traefik.http.routers.dashboard.entrypoints=web-secure"
+      - "traefik.http.routers.dashboard.tls=true"
+      - "traefik.http.routers.dashboard.tls.certresolver=letsencrypt"
+      - "traefik.http.routers.dashboard.service=api@internal"
+      - "traefik.http.routers.dashboard.middlewares=auth"
+      - "traefik.http.middlewares.auth.basicauth.users=${TRAEFIK_DASHBOARD_PASSWORD_HASH}"
     networks:
       - web
+    logging:
+      driver: awslogs
+      options:
+        awslogs-group: /tfbpshiny/production
+        awslogs-region: us-east-1
+        awslogs-stream: traefik
+        awslogs-create-group: "true"
+    restart: unless-stopped
 
 networks:
   web:

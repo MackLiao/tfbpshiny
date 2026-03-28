@@ -1,16 +1,17 @@
 [tool.poetry]
 name = "tfbpshiny"
 version = "0.0.0"
-description = "A shiny app for django.tfbindingandperturbation.com"
+description = "A shiny app which provides a dashboard to https://huggingface.co/collections/BrentLab/yeastresources"
 authors = ["chasem <chasem@wustl.edu>"]
 license = "GPL-3.0"
 readme = "README.md"
 
 [tool.poetry.dependencies]
 python = "^3.11"
-tfbpapi = {git = "https://github.com/cmatKhan/tfbpapi.git", rev = "dev"}
+# use `rev` to pin to a specific hash, or tag, from the git repo
+labretriever = {git = "https://github.com/cmatKhan/labretriever.git", rev = "ad9025d"}
 shiny = "^1.4.0"
-shinywidgets = "^0.5.2"
+shinywidgets = "^0.7.1"
 upsetjs-jupyter-widget = "^1.9.0"
 scikit-learn = "^1.6.1"
 plotly = "^6.0.1"
@@ -18,9 +19,11 @@ python-dotenv = "^1.1.0"
 faicons = "^0.2.2"
 
 [tool.poetry.group.dev.dependencies]
-pytest = "^8.3.5"
-ipykernel = "^6.29.5"
+ipykernel = "^7.2.0"
+pytest = "^9.0.2"
 nbformat = "^5.10.4"
+playwright = "^1.58.0"
+pytest-playwright = "^0.7.2"
 
 [tool.pytest.ini_options]
 minversion = "6.0"
@@ -32,8 +35,8 @@ pythonpath = ['.']
 addopts = "--ignore=tmp"
 
 [tool.coverage.run]
-include = ["yeastdnnexplorer/**"]
-omit = ["*/tests/*", "experiments/"]
+include = ["tfbpshiny/**"]
+omit = ["*/tests/*"]
 
 [tool.black]
 line-length = 88
@@ -44,7 +47,7 @@ include = '\.py$'
 profile = "black"
 line_length = 88
 known_first_party = [
-    "yeastdnnexplorer",
+    "tfbpshiny",
 ]
 skip = ["venv/"]
 

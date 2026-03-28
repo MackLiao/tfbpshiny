@@ -1,0 +1,240 @@
+repositories:
+  BrentLab/callingcards:
+    Regulator locus tag:
+      field: regulator_locus_tag
+    Regulator symbol:
+      field: regulator_symbol
+    Carbon source:
+      path: experimental_conditions.media.carbon_source.compound
+    Temperature:
+      path: experimental_conditions.temperature_celsius
+      dtype: string
+    dataset:
+      2026_analysis_set:
+        tags:
+          data_type: binding
+          assay: CallingCards
+          display_name: "2026 Calling Cards"
+        db_name: callingcards
+        sample_id:
+          field: gm_id
+
+  BrentLab/harbison_2004:
+    dataset:
+      # binding
+      harbison_2004:
+        tags:
+          data_type: binding
+          assay: ChIP-chip
+          display_name: "2004 ChIP-chip (Harbison)"
+        db_name: harbison
+        sample_id:
+          field: sample_id
+        Carbon source:
+          field: condition
+          path: media.carbon_source.compound
+        Temperature:
+          field: condition
+          path: temperature_celsius
+          dtype: string
+        Regulator locus tag:
+          field: regulator_locus_tag
+        Regulator symbol:
+          field: regulator_symbol
+        Experimental condition:
+          field: condition
+
+  BrentLab/rossi_2021:
+    # binding
+    Carbon source:
+      path: experimental_conditions.media.carbon_source.compound
+    Temperature:
+      path: experimental_conditions.temperature_celsius
+      dtype: string
+    dataset:
+      rossi_2021_af_combined:
+        tags:
+          data_type: binding
+          assay: ChIPexo
+          display_name: "2021 ChIP-exo (Rossi)"
+        db_name: rossi
+        sample_id:
+          field: sample_id
+        Regulator locus tag:
+          field: regulator_locus_tag
+        Regulator symbol:
+          field: regulator_symbol
+
+  BrentLab/hu_2007_reimand_2010:
+    # perturbation
+    Carbon source:
+      path: experimental_conditions.media.carbon_source.compound
+    Temperature:
+      path: experimental_conditions.temperature_celsius
+      dtype: string
+    dataset:
+      hu_2007_reimand_2010:
+        tags:
+          data_type: perturbation
+          assay: TFKO
+          display_name: "2007 TFKO (Hu)"
+        db_name: hu_reimand
+        sample_id:
+          field: sample_id
+        Regulator locus tag:
+          field: regulator_locus_tag
+        Regulator symbol:
+          field: regulator_symbol
+
+  BrentLab/mahendrawada_2025:
+    Temperature:
+      path: experimental_conditions.temperature_celsius
+      dtype: string
+    dataset:
+      # binding
+      chec_mahendrawada_m2025_af_combined:
+        tags:
+          data_type: binding
+          assay: ChEC-seq
+          display_name: "2025 ChEC-seq (Mahendrawada)"
+        db_name: chec_m2025
+        sample_id:
+          field: sample_id
+        Regulator locus tag:
+          field: regulator_locus_tag
+        Regulator symbol:
+          field: regulator_symbol
+        Experimental condition:
+          field: condition
+      # perturbation
+      rnaseq_reprocessed:
+        tags:
+          data_type: perturbation
+          assay: ChIPexo
+          display_name: "2025 Degron (Mahendrawada)"
+        db_name: degron
+        sample_id:
+          field: sample_id
+        Regulator locus tag:
+          field: regulator_locus_tag
+        Regulator symbol:
+          field: regulator_symbol
+
+  BrentLab/hughes_2006:
+    dataset:
+      # perturbation
+      overexpression:
+        tags:
+          data_type: perturbation
+          assay: overexpression
+          display_name: "2006 Overexpression (Hughes)"
+        db_name: hughes_overexpression
+        sample_id:
+          field: sample_id
+        Carbon source:
+          path: experimental_conditions.media.carbon_source.compound
+        Temperature:
+          path: experimental_conditions.temperature_celsius
+          dtype: string
+        Regulator locus tag:
+          field: regulator_locus_tag
+        Regulator symbol:
+          field: regulator_symbol
+      # perturbation
+      knockout:
+        tags:
+          data_type: perturbation
+          assay: TFKO
+          display_name: "2006 Knockout (Hughes)"
+        db_name: hughes_knockout
+        sample_id:
+          field: sample_id
+        Carbon source:
+          path: experimental_conditions.media.carbon_source.compound
+        Temperature:
+          path: experimental_conditions.temperature_celsius
+          dtype: string
+        Regulator locus tag:
+          field: regulator_locus_tag
+        Regulator symbol:
+          field: regulator_symbol
+
+  BrentLab/kemmeren_2014:
+    dataset:
+      # perturbation
+      kemmeren_2014:
+        tags:
+          data_type: perturbation
+          assay: TFKO
+          display_name: "2014 TFKO (Kemmeren)"
+        db_name: kemmeren
+        sample_id:
+          field: sample_id
+        Carbon source:
+          path: experimental_conditions.media.carbon_source.compound
+        Temperature:
+          path: experimental_conditions.temperature_celsius
+          dtype: string
+        Regulator locus tag:
+          field: regulator_locus_tag
+        Regulator symbol:
+          field: regulator_symbol
+
+  BrentLab/hackett_2020:
+    dataset:
+      # perturbation
+      hackett_2020:
+        tags:
+          data_type: perturbation
+          assay: overexpression
+          display_name: "2020 Overexpression (Hackett)"
+        db_name: hackett
+        sample_id:
+          field: sample_id
+        Carbon source:
+          path: experimental_conditions.media.carbon_source.compound
+        Temperature:
+          path: experimental_conditions.temperature_celsius
+          dtype: string
+        Regulator locus tag:
+          field: regulator_locus_tag
+        Regulator symbol:
+          field: regulator_symbol
+
+  BrentLab/yeast_comparative_analysis:
+    dataset:
+      dto:
+        db_name: dto
+        sample_id:
+          field: sample_id
+        dto_pvalue:
+          field: dto_empirical_pvalue
+        dto_fdr:
+          field: dto_fdr
+        links:
+          binding_id:
+            - [BrentLab/harbison_2004, harbison_2004]
+            - [BrentLab/callingcards, annotated_features]
+            - [BrentLab/callingcards, annotated_features_combined]
+            - [BrentLab/callingcards, annotated_features_orig_reprocess]
+            - [BrentLab/rossi_2021, rossi_2021_af_combined]
+            - [BrentLab/mahendrawada_2025, chec_mahendrawada_m2025_af_combined]
+          perturbation_id:
+            - [BrentLab/kemmeren_2014, kemmeren_2014]
+            - [BrentLab/hackett_2020, hackett_2020]
+            - [BrentLab/hughes_2006, overexpression]
+            - [BrentLab/hughes_2006, knockout]
+            - [BrentLab/mahendrawada_2025, rnaseq_reprocessed]
+
+factor_aliases:
+  Carbon source:
+    glucose: [D-glucose, dextrose, glu]
+    galactose: [D-galactose, gal]
+    raffinose: [D-raffinose]
+
+missing_value_labels:
+  Carbon source: unspecified
+
+description:
+  Carbon source: The carbon source provided during growth
+  Temperature: Growth temperature in degrees Celsius
