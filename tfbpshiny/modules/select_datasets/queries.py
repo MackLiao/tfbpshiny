@@ -205,9 +205,31 @@ def regulator_display_labels_query(db_name: str) -> tuple[str, dict]:
     )
 
 
+def full_data_query(
+    db_name: str, filters: dict[str, Any] | None = None
+) -> tuple[str, dict[str, Any]]:
+    """
+    Return ``(sql, params)`` for querying the dataset's full data view with optional
+    filters.
+
+    The full data view (``{db_name}``) includes all genomic data columns joined with
+    metadata columns.
+
+    :param db_name: Dataset name (e.g. ``'harbison'``).
+    :param filters: Active filters for this dataset — same structure as
+        :func:`metadata_query`.
+    :return: ``(sql_string, params_dict)`` ready for ``vdb.query(sql, **params)``.
+
+    """
+    params: dict[str, Any] = {}
+    where = _build_where(filters, params)
+    return f"SELECT * FROM {db_name}{where}", params
+
+
 __all__ = [
     "FIELD_TYPE_OVERRIDES",
     "metadata_query",
+    "full_data_query",
     "sample_count_query",
     "regulator_locus_tags_query",
     "regulator_breakdown_query",

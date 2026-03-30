@@ -2,6 +2,7 @@
 
 from tfbpshiny.modules.select_datasets.queries import (
     _build_where,
+    full_data_query,
     metadata_query,
     regulator_breakdown_query,
     regulator_display_labels_query,
@@ -132,6 +133,22 @@ def test_regulator_breakdown_query_with_filters():
     # filters produce WHERE; the regulator IN clause must use AND, not a second WHERE
     assert "AND regulator_locus_tag IN" in sql
     assert sql.count("WHERE") == 3  # filters appear in both multi and per_reg CTEs
+
+
+def test_full_data_query_no_filters():
+    sql, params = full_data_query("harbison")
+    assert sql == "SELECT * FROM harbison"
+    assert params == {}
+
+
+def test_full_data_query_with_filter():
+    sql, params = full_data_query(
+        "harbison", {"strain": {"type": "categorical", "value": ["BY4741"]}}
+    )
+    assert "WHERE" in sql
+    assert "harbison" in sql
+    assert "harbison_meta" not in sql
+    assert "BY4741" in params.values()
 
 
 def test_regulator_breakdown_query_no_filters_uses_where():

@@ -146,6 +146,7 @@ body {
     padding: 12px 16px;
     border-top: 1px solid var(--color-border);
     background: var(--color-surface);
+    text-align: left;
 }
 
 /* --- Main workspace ----------------------------------------------------- */
@@ -412,6 +413,32 @@ body {
 .matrix-summary-table .matrix-cell-diagonal:hover .matrix-cell-button,
 .matrix-summary-table .matrix-cell-interactive:hover .matrix-cell-button {
     color: #FFFFFF;
+}
+
+/* --- Export button (sidebar footer) ------------------------------------- */
+.selection-sidebar.collapsed .sidebar-footer {
+    display: none;
+}
+
+.sidebar-footer .btn-export-datasets {
+    width: 100%;
+    background: var(--color-primary);
+    color: #fff;
+    border: none;
+    border-radius: var(--radius-sm);
+    padding: 8px 12px;
+    font-size: var(--font-size-base);
+    font-weight: 600;
+    cursor: pointer;
+    display: block;
+    text-align: left;
+    gap: 6px;
+    transition: background var(--transition-fast);
+}
+
+.sidebar-footer .btn-export-datasets:hover {
+    background: var(--color-primary-dark);
+    color: #fff;
 }
 
 /* --- Dataset filter modal ----------------------------------------------- */

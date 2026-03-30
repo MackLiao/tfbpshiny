@@ -56,6 +56,7 @@ from __future__ import annotations
 from importlib.metadata import PackageNotFoundError, version
 from typing import Any, Literal
 
+import faicons as fa
 from shiny import ui
 
 # ---------------------------------------------------------------------------
@@ -521,6 +522,23 @@ def matrix_table(header_row: ui.Tag, *body_rows: ui.Tag) -> ui.Tag:
     )
 
 
+def export_download_button(id: str) -> ui.Tag:
+    """
+    Full-width download button for exporting selected datasets as a tarball.
+
+    CSS: ``.btn-export-datasets``
+
+    :param id: Shiny download ID (paired with a ``@render.download`` handler).
+
+    """
+    return ui.download_button(
+        id,
+        "Export Selected Datasets",
+        icon=fa.icon_svg("download", width="14px", height="14px"),
+        class_="btn-export-datasets",
+    )
+
+
 __all__ = [
     # tooltips
     "tooltip",
@@ -554,4 +572,6 @@ __all__ = [
     "matrix_row_label",
     "matrix_cell",
     "matrix_table",
+    # export
+    "export_download_button",
 ]

@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+import asyncio
 import hashlib
+import io
 from logging import Logger
 from typing import Any
 
@@ -12,8 +14,15 @@ from labretriever import VirtualDB
 from shiny import module, reactive, render, ui
 
 from tfbpshiny import components
+from tfbpshiny.components import export_download_button
+from tfbpshiny.modules.select_datasets.export import (
+    ExportDataset,
+    build_export_tarball,
+    get_dataset_description,
+)
 from tfbpshiny.modules.select_datasets.queries import (
     FIELD_TYPE_OVERRIDES,
+    full_data_query,
     metadata_query,
     regulator_display_labels_query,
 )
@@ -535,6 +544,95 @@ def select_datasets_sidebar_server(
         modal_open_for.set(None)
         modal_df.set(None)
 
+    @render.download(
+        filename=lambda: "tfbpshiny_export.tar.gz",
+        media_type="application/gzip",
+    )
+    async def export_datasets():
+        """
+        Build and stream a .tar.gz archive of all active datasets.
+
+        The tarball is built in a worker thread via ``asyncio.to_thread`` so
+        the Shiny event loop stays responsive.  A ``ui.Progress`` bar shows
+        live per-dataset progress via an ``asyncio.Queue`` bridged from the
+        worker thread with ``call_soon_threadsafe``.
+
+        :trigger: ``input.export_datasets`` — fires when the user clicks the
+            Export Selected Datasets download button.
+
+        """
+        all_active = _active_binding_datasets() + _active_perturbation_datasets()
+        if not all_active:
+            return
+
+        filters = dataset_filters()
+        n = len(all_active)
+
+        # Build ExportDataset specs (SQL + params, not DataFrames)
+        export_list: list[ExportDataset] = []
+        for db_name in all_active:
+            ds_filters = filters.get(db_name)
+            display_name = dataset_dict[db_name].get("display_name", db_name)
+
+            meta_sql, meta_params = metadata_query(db_name, ds_filters)
+            data_sql, data_params = full_data_query(db_name, ds_filters)
+            description = get_dataset_description(vdb, db_name)
+
+            export_list.append(
+                ExportDataset(
+                    display_name=display_name,
+                    metadata_sql=meta_sql,
+                    metadata_params=meta_params,
+                    data_sql=data_sql,
+                    data_params=data_params,
+                    description=description,
+                )
+            )
+
+        # asyncio.Queue bridged from the worker thread for live progress.
+        # A None sentinel signals that the build is complete.
+        progress_q: asyncio.Queue[str | None] = asyncio.Queue()
+        loop = asyncio.get_running_loop()
+
+        def _on_dataset_done(name: str) -> None:
+            loop.call_soon_threadsafe(progress_q.put_nowait, name)
+
+        def _build_and_signal() -> io.BytesIO:
+            try:
+                return build_export_tarball(export_list, vdb, _on_dataset_done)
+            finally:
+                loop.call_soon_threadsafe(progress_q.put_nowait, None)
+
+        with ui.Progress(min=0, max=n, session=session) as progress:
+            progress.set(0, message="Preparing export...")
+
+            build_task = asyncio.create_task(asyncio.to_thread(_build_and_signal))
+
+            # Consume progress items until the sentinel arrives
+            done = 0
+            while True:
+                name = await progress_q.get()
+                if name is None:
+                    break
+                done += 1
+                progress.set(
+                    done,
+                    message=f"Packaged {name}",
+                    detail=f"{done} of {n}",
+                )
+
+            try:
+                buf = await build_task
+            except Exception:
+                logger.exception("Export tarball build failed")
+                return
+
+            progress.set(n, message="Download ready")
+
+        # Yield chunks from the in-memory buffer
+        while chunk := buf.read(65536):
+            yield chunk
+
     @render.ui
     def sidebar_panel() -> ui.Tag:
         """
@@ -619,12 +717,10 @@ def select_datasets_sidebar_server(
                 )
             )
 
-        return ui.div(
-            {
-                "class": "context-sidebar selection-sidebar"
-                + (" collapsed" if is_collapsed else ""),
-                "id": "selection-sidebar",
-            },
+        has_active = bool(_active_binding_datasets() or _active_perturbation_datasets())
+        show_footer = has_active and not is_collapsed
+
+        children: list[Any] = [
             ui.div(
                 {"class": "sidebar-header"},
                 ui.div(
@@ -653,6 +749,23 @@ def select_datasets_sidebar_server(
                 {"class": "sidebar-body"},
                 ui.div({"class": "dataset-list"}, *section_tags),
             ),
+        ]
+
+        if show_footer:
+            children.append(
+                ui.div(
+                    {"class": "sidebar-footer"},
+                    export_download_button("export_datasets"),
+                )
+            )
+
+        return ui.div(
+            {
+                "class": "context-sidebar selection-sidebar"
+                + (" collapsed" if is_collapsed else ""),
+                "id": "selection-sidebar",
+            },
+            *children,
         )
 
     return _active_binding_datasets, _active_perturbation_datasets, dataset_filters
