@@ -83,20 +83,20 @@ def select_datasets_sidebar_server(
     # Build description lookup from DataCard configs (via VirtualDB internals).
     # TODO: replace with a public VirtualDB method when one is available.
     descriptions: dict[str, str] = {}
-    try:
-        for db_name in dataset_dict:
+    for db_name in dataset_dict:
+        try:
             repo_id, config_name = vdb._db_name_map[db_name]
             card = vdb._datacards.get(repo_id)
             if card:
                 cfg = card.get_config(config_name)
                 if cfg and cfg.description:
                     descriptions[db_name] = cfg.description
-    except (AttributeError, KeyError):
-        logger.warning(
-            "Could not read dataset descriptions from VirtualDB internals; "
-            "tooltips will be disabled. Update labretriever or add a public API."
-        )
-        descriptions = {}
+        except (AttributeError, KeyError):
+            logger.warning(
+                f"Failed to fetch description for {db_name} from VirtualDB "
+                "datacard config"
+            )
+            descriptions[db_name] = "No description available."
 
     # list of (db_name, display_name, description) tuples
     binding_datasets: list[tuple[str, str, str]] = [
