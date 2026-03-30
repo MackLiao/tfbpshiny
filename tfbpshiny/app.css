@@ -477,3 +477,9 @@ body {
     font-size: var(--font-size-label);
     font-weight: 600;
 }
+
+/* --- Dataset tooltip ----------------------------------------------------- */
+.tooltip-inner {
+    max-width: 300px;
+    text-align: left;
+}
