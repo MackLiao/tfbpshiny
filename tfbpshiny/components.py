@@ -84,6 +84,38 @@ _GITHUB_SVG_PATH = (
 
 
 # ---------------------------------------------------------------------------
+# Tooltips
+# ---------------------------------------------------------------------------
+
+
+def tooltip(
+    trigger: ui.Tag,
+    text: str,
+    *,
+    placement: Literal["auto", "top", "right", "bottom", "left"] = "right",
+) -> ui.Tag:
+    """
+    Wrap a UI element with a Bootstrap tooltip shown on hover.
+
+    CSS: ``.tooltip-inner`` — overrides Bootstrap defaults to set
+    ``max-width: 300px`` and ``text-align: left``.
+
+    This is a simplified wrapper around ``ui.tooltip`` that exposes only
+    ``trigger``, ``text``, and ``placement``.  If you need ``id``,
+    ``options``, or extra tag attributes, extend this function rather than
+    bypassing it.
+
+    :param trigger: The element the user hovers over to reveal the tooltip.
+    :param text: Plain-text content displayed inside the tooltip bubble.
+    :param placement: Where the tooltip appears relative to the trigger.
+        Defaults to ``"right"`` (instead of Shiny's ``"auto"``) to suit
+        the sidebar layout where tooltips are most commonly used.
+
+    """
+    return ui.tooltip(trigger, text, placement=placement)
+
+
+# ---------------------------------------------------------------------------
 # Layout shells
 # ---------------------------------------------------------------------------
 
@@ -490,6 +522,8 @@ def matrix_table(header_row: ui.Tag, *body_rows: ui.Tag) -> ui.Tag:
 
 
 __all__ = [
+    # tooltips
+    "tooltip",
     # layout
     "sidebar_shell",
     "workspace_shell",

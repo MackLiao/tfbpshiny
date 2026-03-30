@@ -11,6 +11,7 @@ import pandas as pd
 from labretriever import VirtualDB
 from shiny import module, reactive, render, ui
 
+from tfbpshiny import components
 from tfbpshiny.modules.select_datasets.queries import (
     FIELD_TYPE_OVERRIDES,
     metadata_query,
@@ -565,7 +566,9 @@ def select_datasets_sidebar_server(
                 )
             label_span = ui.span({"class": "dataset-row-label sidebar-text"}, label)
             if description:
-                label_span = ui.tooltip(label_span, description, placement="right")
+                label_span = components.tooltip(
+                    label_span, description, placement="right"
+                )
             return ui.div(
                 {"class": "dataset-row"},
                 ui.input_switch(
