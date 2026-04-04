@@ -65,9 +65,10 @@ def select_datasets_sidebar_server(
     session: Any,
     vdb: VirtualDB,
     logger: Logger,
+    active_module: reactive.Value[str] | None = None,
 ) -> tuple[
-    reactive.Value[list[str]],
-    reactive.Value[list[str]],
+    reactive.Calc_[list[str]],
+    reactive.Calc_[list[str]],
     reactive.Value[dict[str, Any]],
 ]:
     """
@@ -133,14 +134,37 @@ def select_datasets_sidebar_server(
     # stores the DataFrame fetched when a filter modal is opened
     modal_df: reactive.Value[pd.DataFrame | None] = reactive.value(None)
 
-    # Persistent selection state — survives UI re-renders across navigation
-    _active_binding_datasets: reactive.Value[list[str]] = reactive.value([])
-    _active_perturbation_datasets: reactive.Value[list[str]] = reactive.value([])
-    # Per-dataset toggle state — persists so toggles restore correctly on re-render
+    # Per-dataset toggle state — persists so toggles restore correctly on re-render.
+    # Keys are fixed at init time and match dataset_dict keys exactly.
     _toggle_state: dict[str, reactive.Value[bool]] = {
         db_name: reactive.value(False)
         for db_name, _, _ in binding_datasets + perturbation_datasets
     }
+
+    # Active dataset lists derived from toggle state. Using @reactive.calc
+    # instead of manually maintained reactive.Value eliminates redundant writes
+    # and lets Shiny coalesce rapid toggle changes within a single flush cycle.
+    @reactive.calc
+    def _active_binding_datasets() -> list[str]:
+        """
+        Binding datasets currently toggled on.
+
+        :trigger: ``_toggle_state[db]`` for each binding dataset — re-runs
+            whenever any binding toggle changes.
+
+        """
+        return [db for db, _, _ in binding_datasets if _toggle_state[db]()]
+
+    @reactive.calc
+    def _active_perturbation_datasets() -> list[str]:
+        """
+        Perturbation datasets currently toggled on.
+
+        :trigger: ``_toggle_state[db]`` for each perturbation dataset — re-runs
+            whenever any perturbation toggle changes.
+
+        """
+        return [db for db, _, _ in perturbation_datasets if _toggle_state[db]()]
 
     @reactive.effect
     @reactive.event(input.toggle_sidebar)
@@ -154,13 +178,17 @@ def select_datasets_sidebar_server(
         """
         collapsed.set(not collapsed())
 
-    def _make_toggle_effect(db_name: str, data_type: str) -> None:
+    def _make_toggle_effect(db_name: str) -> None:
         @reactive.effect
         @reactive.event(input[_toggle_id(db_name)])
         def _on_toggle() -> None:
             """
-            Update persistent toggle state and active-dataset list when a dataset switch
-            is changed.
+            Update persistent toggle state when a dataset switch is changed.
+
+            The active-dataset lists are derived via ``@reactive.calc`` from
+            ``_toggle_state``, so only a single write is needed here.  The
+            guard avoids redundant ``.set()`` calls (e.g. when
+            ``ui.update_switch`` echoes back the same value).
 
             :trigger input[_toggle_id(db_name)]: fires when the user flips the switch
             for this specific dataset.
@@ -168,26 +196,15 @@ def select_datasets_sidebar_server(
             """
             try:
                 val = bool(input[_toggle_id(db_name)]())
-            except Exception:
+            except (KeyError, AttributeError):
                 return
+            with reactive.isolate():
+                if _toggle_state[db_name]() == val:
+                    return
             _toggle_state[db_name].set(val)
-            if data_type == "binding":
-                current = list(_active_binding_datasets())
-                if val and db_name not in current:
-                    current.append(db_name)
-                elif not val and db_name in current:
-                    current.remove(db_name)
-                _active_binding_datasets.set(current)
-            else:
-                current = list(_active_perturbation_datasets())
-                if val and db_name not in current:
-                    current.append(db_name)
-                elif not val and db_name in current:
-                    current.remove(db_name)
-                _active_perturbation_datasets.set(current)
 
-    for db_name, tags in dataset_dict.items():
-        _make_toggle_effect(db_name, tags.get("data_type", ""))
+    for db_name, _, _ in binding_datasets + perturbation_datasets:
+        _make_toggle_effect(db_name)
 
     for _db_name, _, _ in binding_datasets + perturbation_datasets:
 
@@ -303,7 +320,11 @@ def select_datasets_sidebar_server(
             # clear dataset-specific filters for the open dataset
             current.pop(db_name, None)
             dataset_filters.set(current)
-        logger.debug(f"dataset_filters reset for {db_name}: {current}")
+            logger.debug(
+                "dataset_filters reset for %s: %d datasets with active filters",
+                db_name,
+                len(current),
+            )
         ui.modal_remove()
         modal_open_for.set(None)
         modal_df.set(None)
@@ -522,23 +543,20 @@ def select_datasets_sidebar_server(
             current.pop(db_name, None)
 
         dataset_filters.set(current)
-        logger.debug(f"dataset_filters applied for {db_name}: {current}")
+        logger.debug(
+            "dataset_filters applied for %s: %d fields set",
+            db_name,
+            len(ds_filters),
+        )
 
-        # activate the dataset if it isn't already on
+        # activate the dataset if it isn't already on — the @reactive.calc
+        # will automatically include it in the active list.
+        # _toggle_state is set first; ui.update_switch syncs the DOM.
+        # _on_toggle will fire from the DOM update but the isolate() guard
+        # prevents a redundant set() call.
         if not _toggle_state[db_name]():
             _toggle_state[db_name].set(True)
-            current_b = list(_active_binding_datasets())
-            current_p = list(_active_perturbation_datasets())
-            if (
-                db_name in [d for d, _, _ in binding_datasets]
-                and db_name not in current_b
-            ):
-                _active_binding_datasets.set(current_b + [db_name])
-            elif (
-                db_name in [d for d, _, _ in perturbation_datasets]
-                and db_name not in current_p
-            ):
-                _active_perturbation_datasets.set(current_p + [db_name])
+            ui.update_switch(_toggle_id(db_name), value=True)
 
         ui.modal_remove()
         modal_open_for.set(None)
@@ -643,9 +661,25 @@ def select_datasets_sidebar_server(
         (e.g. on navigation back to this page) reflect the current selection.
 
         :trigger collapsed: re-renders when the sidebar is collapsed or expanded.
-        :trigger _toggle_state[*]: re-renders when any dataset's persistent
-            toggle state changes (i.e. after ``_on_toggle`` fires).
+        :trigger input.search: re-renders when the search input changes.
+
+        Toggle state is read with ``reactive.isolate()`` so that toggling a
+        dataset does NOT trigger a full sidebar re-render.  The
+        ``ui.input_switch`` widget manages its own client-side state after
+        initial render; programmatic state changes are synced via
+        ``ui.update_switch`` in a separate effect.
+
+        :trigger active_module: re-renders on page navigation so that
+            toggle values are refreshed from ``_toggle_state`` when the
+            user returns to the Select Datasets page.
         """
+        # Read active_module to invalidate on navigation; the sidebar only
+        # renders when active_module == "selection", but we re-compute on
+        # every navigation change so toggle values are always fresh when the
+        # user returns to this page.  Re-renders while the output element is
+        # absent are deferred by Shiny until the element reappears.
+        if active_module is not None:
+            active_module()
         is_collapsed = collapsed()
 
         search_term = ""
@@ -656,7 +690,9 @@ def select_datasets_sidebar_server(
                 pass
 
         def _dataset_row(db_name: str, label: str, description: str) -> ui.Tag:
-            current_val = _toggle_state[db_name]()
+            # isolate: read current value without creating a reactive dependency
+            with reactive.isolate():
+                current_val = _toggle_state[db_name]()
             if is_collapsed:
                 return ui.div(
                     {"class": "dataset-row"},
@@ -717,10 +753,12 @@ def select_datasets_sidebar_server(
                 )
             )
 
-        has_active = bool(_active_binding_datasets() or _active_perturbation_datasets())
-        show_footer = has_active and not is_collapsed
-
-        children: list[Any] = [
+        return ui.div(
+            {
+                "class": "context-sidebar selection-sidebar"
+                + (" collapsed" if is_collapsed else ""),
+                "id": "selection-sidebar",
+            },
             ui.div(
                 {"class": "sidebar-header"},
                 ui.div(
@@ -749,24 +787,27 @@ def select_datasets_sidebar_server(
                 {"class": "sidebar-body"},
                 ui.div({"class": "dataset-list"}, *section_tags),
             ),
-        ]
-
-        if show_footer:
-            children.append(
-                ui.div(
-                    {"class": "sidebar-footer"},
-                    export_download_button("export_datasets"),
-                )
-            )
-
-        return ui.div(
-            {
-                "class": "context-sidebar selection-sidebar"
-                + (" collapsed" if is_collapsed else ""),
-                "id": "selection-sidebar",
-            },
-            *children,
+            ui.output_ui("sidebar_footer"),
         )
+
+    @render.ui
+    def sidebar_footer() -> ui.TagChild:
+        """
+        Export button footer — rendered independently so it can react to active-dataset
+        changes without triggering a full sidebar re-render.
+
+        :trigger: ``_active_binding_datasets``, ``_active_perturbation_datasets``,
+            ``collapsed`` — re-renders when active datasets or collapse state change.
+
+        """
+        has_active = bool(_active_binding_datasets() or _active_perturbation_datasets())
+        is_collapsed = collapsed()
+        if has_active and not is_collapsed:
+            return ui.div(
+                {"class": "sidebar-footer"},
+                export_download_button("export_datasets"),
+            )
+        return None
 
     return _active_binding_datasets, _active_perturbation_datasets, dataset_filters
 

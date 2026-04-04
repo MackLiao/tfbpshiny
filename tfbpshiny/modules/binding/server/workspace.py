@@ -24,7 +24,7 @@ def binding_workspace_server(
     input: Any,
     output: Any,
     session: Any,
-    active_binding_datasets: reactive.Value[list[str]],
+    active_binding_datasets: reactive.Calc_[list[str]],
     corr_type: Callable[[], str],
     col_preference: Callable[[], str],
     dataset_filters: reactive.Value[dict[str, Any]],

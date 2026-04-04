@@ -17,7 +17,7 @@ def binding_sidebar_server(
     input: Any,
     output: Any,
     session: Any,
-    active_binding_datasets: reactive.Value[list[str]],
+    active_binding_datasets: reactive.Calc_[list[str]],
     dataset_filters: reactive.Value[dict[str, Any]],
     vdb: VirtualDB,
     logger: Logger,

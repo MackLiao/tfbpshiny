@@ -22,8 +22,8 @@ def comparison_sidebar_server(
     input: Any,
     output: Any,
     session: Any,
-    active_binding_datasets: reactive.Value[list[str]],
-    active_perturbation_datasets: reactive.Value[list[str]],
+    active_binding_datasets: reactive.Calc_[list[str]],
+    active_perturbation_datasets: reactive.Calc_[list[str]],
     vdb: VirtualDB,
     logger: Logger,
 ) -> tuple[

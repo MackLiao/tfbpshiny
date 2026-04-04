@@ -107,7 +107,10 @@ def app_server(input: Any, output: Any, session: Any) -> None:
     # Dataset selection state — shared across all analysis modules
     active_binding_datasets, active_perturbation_datasets, dataset_filters = (
         select_datasets_sidebar_server(
-            "select_datasets_sidebar", vdb=vdb, logger=logger
+            "select_datasets_sidebar",
+            vdb=vdb,
+            logger=logger,
+            active_module=active_module,
         )
     )
     select_datasets_workspace_server(
