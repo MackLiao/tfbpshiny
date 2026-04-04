@@ -79,7 +79,7 @@ app_ui = ui.page_fillable(
             ui.div(
                 {"class": "nav-tags"},
                 nav_button("home", "Home"),
-                nav_button("selection", "Select Datasets"),
+                nav_button("selection", "Dataset selection"),
                 nav_button("binding", "Binding"),
                 nav_button("perturbation", "Perturbation"),
                 nav_button("comparison", "Comparison"),
