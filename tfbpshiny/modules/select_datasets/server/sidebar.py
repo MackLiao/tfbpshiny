@@ -242,6 +242,12 @@ def select_datasets_sidebar_server(
                                 }
                         except Exception:
                             pass
+                    # Remove missing-value placeholders (e.g. "unspecified")
+                    # so they do not appear as selectable filter options.
+                    # Discard ALL configured placeholders from every field
+                    # because the same sentinel can appear across fields
+                    # via CASE WHEN ELSE fallbacks in labretriever.
+                    levels -= set(vdb.config.missing_value_labels.values())
                     common_field_levels[cf_field] = list(levels)
 
                 # build {locus_tag: "SYMBOL (LOCUS_TAG)"} map for regulator selectize
@@ -493,7 +499,12 @@ def select_datasets_sidebar_server(
                         current.pop(ds, None)
 
         # clear common fields that were removed (not in common_filters)
+        # regulator fields are handled by the explicit block above — skip
+        # them here so the cleanup does not undo the regulator filter.
+        _separately_handled = {"regulator_locus_tag", "regulator_symbol"}
         for f in common_fields:
+            if f in _separately_handled:
+                continue
             if f not in common_filters:
                 # check how this field was previously stored to decide scope of removal
                 prev_spec = current.get(db_name, {}).get(f)
