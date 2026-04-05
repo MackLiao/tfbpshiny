@@ -501,6 +501,54 @@ body {
     font-weight: 600;
 }
 
+/* --- Home page feature cards -------------------------------------------- */
+.home-cards {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+    margin-top: 16px;
+}
+
+.home-card {
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-md);
+    padding: 20px 24px;
+    background: var(--color-surface);
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    gap: 20px;
+}
+
+.home-card img {
+    width: 100px;
+    height: 100px;
+    flex-shrink: 0;
+    object-fit: contain;
+}
+
+.home-card-title {
+    font-weight: bold;
+    font-size: 1.05rem;
+    margin-bottom: 4px;
+}
+
+.home-card-title a {
+    color: #722F37;
+    text-decoration: none;
+}
+
+.home-card-title a:hover {
+    color: #8B3A42;
+    text-decoration: underline;
+}
+
+.home-card-text {
+    color: var(--color-text);
+    font-size: var(--font-size-base);
+    line-height: 1.5;
+}
+
 /* --- Dataset tooltip ----------------------------------------------------- */
 .tooltip-inner {
     max-width: 300px;

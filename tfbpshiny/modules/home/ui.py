@@ -19,6 +19,36 @@ def _nav_link(label: str, target_id: str) -> ui.Tag:
     )
 
 
+def _feature_card(
+    title: str,
+    target_id: str,
+    description: str,
+    *,
+    image: str | None = None,
+) -> ui.Tag:
+    """
+    Feature card for the home page grid.
+
+    :param title: Card heading (rendered as a nav link).
+    :param target_id: Shiny input ID of the nav button to navigate to.
+    :param description: Short description text below the title.
+    :param image: Optional filename in ``www/`` to display above the title.
+
+    """
+    content = ui.div(
+        {"class": "home-card-content"},
+        ui.div({"class": "home-card-title"}, _nav_link(title, target_id)),
+        ui.div({"class": "home-card-text"}, description),
+    )
+    if image is not None:
+        return ui.div(
+            {"class": "home-card"},
+            ui.img(src=image, alt=title),
+            content,
+        )
+    return ui.div({"class": "home-card"}, content)
+
+
 def home_ui() -> ui.Tag:
     return ui.div(
         {"class": "home-content p-4"},
@@ -40,23 +70,30 @@ def home_ui() -> ui.Tag:
         ui.p(
             "The tabs above take you to pages for selecting and comparing " "datasets."
         ),
-        ui.tags.ul(
-            ui.tags.li(
-                _nav_link("Dataset selection: ", "selection"),
+        ui.div(
+            {"class": "home-cards"},
+            _feature_card(
+                "Dataset selection",
+                "selection",
                 "Choose which binding and perturbation datasets to include "
                 "in your analysis.",
             ),
-            ui.tags.li(
-                _nav_link("Binding: ", "binding"),
-                "Compare TF binding targets in the selected binding datasets.",
+            _feature_card(
+                "Binding",
+                "binding",
+                "Compare TF binding targets in the selected binding " "datasets.",
+                image="binding.png",
             ),
-            ui.tags.li(
-                _nav_link("Perturbation: ", "perturbation"),
+            _feature_card(
+                "Perturbation",
+                "perturbation",
                 "Compare transcriptional responses to TF perturbations in "
                 "the selected perturbation datasets.",
+                image="perturbation.png",
             ),
-            ui.tags.li(
-                _nav_link("Comparison: ", "comparison"),
+            _feature_card(
+                "Comparison",
+                "comparison",
                 "Compare selected binding datasets to selected perturbation "
                 "datasets.",
             ),
